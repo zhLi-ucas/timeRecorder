@@ -133,10 +133,11 @@ fun TimerSetupScreen(
 
         OutlinedTextField(
             value = description,
-            onValueChange = { description = it },
+            onValueChange = { if (it.length <= 50) description = it },
             label = { Text("描述") },
             modifier = Modifier.fillMaxWidth(),
-            minLines = 3
+            minLines = 3,
+            supportingText = { Text("${description.length}/50") }
         )
 
         if (!isStopwatchMode) {

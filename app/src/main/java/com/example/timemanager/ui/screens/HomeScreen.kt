@@ -12,7 +12,8 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun HomeScreen(
     onNavigateToTimer: () -> Unit,
-    onNavigateToOptions: () -> Unit
+    onNavigateToOptions: () -> Unit,
+    onNavigateToRecords: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -38,6 +39,17 @@ fun HomeScreen(
                 .height(56.dp)
         ) {
             Text("进入时间管理", fontSize = 18.sp)
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        OutlinedButton(
+            onClick = onNavigateToRecords,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+        ) {
+            Text("查看记录", fontSize = 18.sp)
         }
 
         Spacer(modifier = Modifier.height(24.dp))

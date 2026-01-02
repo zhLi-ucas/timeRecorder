@@ -7,6 +7,8 @@ import com.example.timemanager.data.DurationRepository
 import com.example.timemanager.data.Tag
 import com.example.timemanager.data.TagRepository
 import com.example.timemanager.data.Task
+import com.example.timemanager.data.TimeRecord
+import com.example.timemanager.data.TimeRecordRepository
 import com.example.timemanager.data.TimerState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -18,12 +20,16 @@ import kotlinx.coroutines.launch
 class TimerViewModel(application: Application) : AndroidViewModel(application) {
     private val tagRepository = TagRepository(application)
     private val durationRepository = DurationRepository(application)
+    private val timeRecordRepository = TimeRecordRepository(application)
 
     private val _tags = MutableStateFlow<List<Tag>>(emptyList())
     val tags: StateFlow<List<Tag>> = _tags.asStateFlow()
 
     private val _durations = MutableStateFlow<List<Int>>(emptyList())
     val durations: StateFlow<List<Int>> = _durations.asStateFlow()
+
+    private val _records = MutableStateFlow<List<TimeRecord>>(emptyList())
+    val records: StateFlow<List<TimeRecord>> = _records.asStateFlow()
 
     private val _currentTask = MutableStateFlow<Task?>(null)
     val currentTask: StateFlow<Task?> = _currentTask.asStateFlow()
@@ -149,10 +155,42 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun stopTimer() {
+        if (_timerState.value == TimerState.RUNNING || _timerState.value == TimerState.PAUSED) {
+            saveTaskRecord(isCompleted = false)
+        }
         timerJob?.cancel()
         _timerState.value = TimerState.IDLE
         _currentTask.value = null
         _displaySeconds.value = 0
+    }
+
+    private fun saveTaskRecord(isCompleted: Boolean) {
+        val task = _currentTask.value ?: return
+        
+        val durationToRecord: Long = if (task.isStopwatch) {
+            _displaySeconds.value.toLong()
+        } else {
+            if (isCompleted) {
+                (task.durationMinutes * 60).toLong()
+            } else {
+                val elapsedSeconds = (task.durationMinutes * 60) - _displaySeconds.value
+                val elapsedMinutes = elapsedSeconds / 60
+                val roundedMinutes = (elapsedMinutes / 5) * 5
+                if (roundedMinutes > 0) roundedMinutes * 60L else 0L
+            }
+        }
+
+        if (durationToRecord > 0) {
+             val record = TimeRecord(
+                tag = task.tag,
+                startTime = task.startTime,
+                endTime = System.currentTimeMillis(),
+                durationSeconds = durationToRecord,
+                description = task.description
+            )
+            timeRecordRepository.addRecord(record)
+            loadRecords()
+        }
     }
 
     fun resetTimer() {

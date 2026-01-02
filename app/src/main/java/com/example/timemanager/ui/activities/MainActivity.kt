@@ -38,7 +38,8 @@ class MainActivity : ComponentActivity() {
 enum class Screen {
     HOME,
     TIMER_SETUP,
-    OPTIONS
+    OPTIONS,
+    RECORDS
 }
 
 @Composable
@@ -52,7 +53,8 @@ fun AppContent() {
         Screen.HOME -> {
             HomeScreen(
                 onNavigateToTimer = { currentScreen = Screen.TIMER_SETUP },
-                onNavigateToOptions = { currentScreen = Screen.OPTIONS }
+                onNavigateToOptions = { currentScreen = Screen.OPTIONS },
+                onNavigateToRecords = { currentScreen = Screen.RECORDS }
             )
         }
         Screen.TIMER_SETUP -> {
@@ -65,6 +67,15 @@ fun AppContent() {
         }
         Screen.OPTIONS -> {
             OptionsScreen(
+                viewModel = timerViewModel,
+                onBack = { currentScreen = Screen.HOME }
+            )
+            BackHandler {
+                currentScreen = Screen.HOME
+            }
+        }
+        Screen.RECORDS -> {
+            TimeRecordsScreen(
                 viewModel = timerViewModel,
                 onBack = { currentScreen = Screen.HOME }
             )
