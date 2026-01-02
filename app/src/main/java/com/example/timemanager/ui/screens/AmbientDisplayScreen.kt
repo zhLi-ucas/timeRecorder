@@ -70,34 +70,39 @@ fun AmbientDisplayScreen(
             .padding(32.dp),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(64.dp)
         ) {
-            // 当前时间
-            Text(
-                text = currentTime.value,
-                style = MaterialTheme.typography.displayLarge.copy(
-                    fontSize = 72.sp,
-                    fontWeight = FontWeight.Light
-                ),
-                color = MaterialTheme.colorScheme.onBackground
-            )
+            // 左侧：时间与日期
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                // 当前时间
+                Text(
+                    text = currentTime.value,
+                    style = MaterialTheme.typography.displayLarge.copy(
+                        fontSize = 120.sp,
+                        fontWeight = FontWeight.Light
+                    ),
+                    color = MaterialTheme.colorScheme.onBackground
+                )
 
-            // 日期
-            Text(
-                text = currentDate.value,
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
-            )
+                // 日期
+                Text(
+                    text = currentDate.value,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                )
+            }
 
-            Spacer(modifier = Modifier.height(48.dp))
-
-            // 当前任务
+            // 右侧：当前任务与倒计时
             if (currentTask != null) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.width(IntrinsicSize.Max)
                 ) {
                     Text(
                         text = currentTask!!.tag,
@@ -107,6 +112,7 @@ fun AmbientDisplayScreen(
                     )
 
                     if (currentTask!!.description.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = currentTask!!.description,
                             style = MaterialTheme.typography.bodyLarge,
@@ -114,7 +120,7 @@ fun AmbientDisplayScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
 
                     // 倒计时
                     if (timerState == com.example.timemanager.data.TimerState.RUNNING ||
@@ -122,7 +128,7 @@ fun AmbientDisplayScreen(
                         Text(
                             text = formatRemainingTime(remainingSeconds),
                             style = MaterialTheme.typography.displayMedium.copy(
-                                fontSize = 48.sp,
+                                fontSize = 80.sp,
                                 fontWeight = FontWeight.Medium
                             ),
                             color = MaterialTheme.colorScheme.secondary

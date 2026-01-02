@@ -30,7 +30,7 @@
             android:name=".ui.activities.AmbientDisplayActivity"
             android:exported="false"
             android:theme="@style/Theme.TimeManager"
-            android:screenOrientation="portrait"
+            android:screenOrientation="landscape"
             android:launchMode="singleTask" />
     </application>
 
