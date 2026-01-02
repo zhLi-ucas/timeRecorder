@@ -3,6 +3,11 @@ package com.example.timemanager.ui.screens
 import android.app.Application
 import android.content.Context
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+// import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -150,6 +155,31 @@ fun AmbientDisplayScreen(
                     text = "暂无任务",
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                )
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp)
+    ) {
+        if (currentTask != null) {
+            FloatingActionButton(
+                onClick = {
+                    actualViewModel.stopTimer()
+                    onBack()
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "停止/退出"
                 )
             }
         }

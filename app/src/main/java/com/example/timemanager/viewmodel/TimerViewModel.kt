@@ -123,6 +123,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
                 if (_displaySeconds.value <= 0) {
                     _timerState.value = TimerState.COMPLETED
                     _onTimerCompleted.value = true
+                    saveTaskRecord(isCompleted = true)
                 }
             }
         }

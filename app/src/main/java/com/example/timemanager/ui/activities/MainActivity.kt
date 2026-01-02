@@ -11,6 +11,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.timemanager.ui.screens.HomeScreen
 import com.example.timemanager.ui.screens.OptionsScreen
@@ -47,8 +48,14 @@ enum class Screen {
 fun AppContent() {
     var currentScreen by rememberSaveable { mutableStateOf(Screen.HOME) }
     
-    // Use the same ViewModel instance across screens
-    val timerViewModel: TimerViewModel = viewModel()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val application = context.applicationContext as android.app.Application
+    
+    // Use the Application-scoped ViewModel instance
+    val timerViewModel: TimerViewModel = viewModel(
+        viewModelStoreOwner = application as androidx.lifecycle.ViewModelStoreOwner,
+        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(application)
+    )
 
     when (currentScreen) {
         Screen.HOME -> {
