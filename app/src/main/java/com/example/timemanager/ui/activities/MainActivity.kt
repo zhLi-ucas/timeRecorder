@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.timemanager.ui.screens.HomeScreen
 import com.example.timemanager.ui.screens.OptionsScreen
+import com.example.timemanager.ui.screens.TimeRecordsScreen
 import com.example.timemanager.ui.screens.TimerSetupScreen
 import com.example.timemanager.ui.theme.TimeManagerTheme
 import com.example.timemanager.viewmodel.TimerViewModel

@@ -50,6 +50,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     init {
         loadTags()
         loadDurations()
+        loadRecords()
     }
 
     private fun loadTags() {
@@ -61,6 +62,12 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     private fun loadDurations() {
         viewModelScope.launch {
             _durations.value = durationRepository.getDurations()
+        }
+    }
+
+    fun loadRecords() {
+        viewModelScope.launch {
+            _records.value = timeRecordRepository.getAllRecords()
         }
     }
 
