@@ -29,10 +29,9 @@ fun TimerSetupScreen(
     viewModel: TimerViewModel? = null
 ) {
     val context = LocalContext.current
-    val actualViewModel = viewModel ?: remember {
-        val app = context.applicationContext as TimeManagerApplication
-        ViewModelProvider(app)[TimerViewModel::class.java]
-    }
+    val actualViewModel = viewModel ?: viewModel(
+        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(context.applicationContext as android.app.Application)
+    )
     
     val tags by actualViewModel.tags.collectAsState()
     var tag by remember { mutableStateOf("") }

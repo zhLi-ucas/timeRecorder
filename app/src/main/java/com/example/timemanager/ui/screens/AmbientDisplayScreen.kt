@@ -1,5 +1,6 @@
 package com.example.timemanager.ui.screens
 
+import android.app.Application
 import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
@@ -25,10 +26,9 @@ fun AmbientDisplayScreen(
     onBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val actualViewModel = viewModel ?: remember {
-        val app = context.applicationContext as TimeManagerApplication
-        ViewModelProvider(app)[TimerViewModel::class.java]
-    }
+    val actualViewModel = viewModel ?: viewModel(
+        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(context.applicationContext as Application)
+    )
 
     val currentTask by actualViewModel.currentTask.collectAsState()
     val remainingSeconds by actualViewModel.remainingSeconds.collectAsState()
