@@ -55,6 +55,11 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         loadTags()
     }
 
+    fun updateTag(tag: Tag) {
+        tagRepository.updateTag(tag)
+        loadTags()
+    }
+
     fun startTimer(task: Task) {
         _currentTask.value = task
         _timerState.value = TimerState.RUNNING

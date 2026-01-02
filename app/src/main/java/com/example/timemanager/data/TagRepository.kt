@@ -46,6 +46,15 @@ class TagRepository(context: Context) {
         saveTags(currentTags)
     }
 
+    fun updateTag(tag: Tag) {
+        val currentTags = getTags().toMutableList()
+        val index = currentTags.indexOfFirst { it.name == tag.name }
+        if (index != -1) {
+            currentTags[index] = tag
+            saveTags(currentTags)
+        }
+    }
+
     private fun saveTags(tags: List<Tag>) {
         val jsonArray = JSONArray()
         tags.forEach { tag ->
