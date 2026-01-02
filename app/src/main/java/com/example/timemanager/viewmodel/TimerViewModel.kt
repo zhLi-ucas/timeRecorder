@@ -3,6 +3,7 @@ package com.example.timemanager.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.timemanager.data.DurationRepository
 import com.example.timemanager.data.Tag
 import com.example.timemanager.data.TagRepository
 import com.example.timemanager.data.Task
@@ -16,9 +17,13 @@ import kotlinx.coroutines.launch
 
 class TimerViewModel(application: Application) : AndroidViewModel(application) {
     private val tagRepository = TagRepository(application)
+    private val durationRepository = DurationRepository(application)
 
     private val _tags = MutableStateFlow<List<Tag>>(emptyList())
     val tags: StateFlow<List<Tag>> = _tags.asStateFlow()
+
+    private val _durations = MutableStateFlow<List<Int>>(emptyList())
+    val durations: StateFlow<List<Int>> = _durations.asStateFlow()
 
     private val _currentTask = MutableStateFlow<Task?>(null)
     val currentTask: StateFlow<Task?> = _currentTask.asStateFlow()
@@ -26,8 +31,10 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     private val _timerState = MutableStateFlow(TimerState.IDLE)
     val timerState: StateFlow<TimerState> = _timerState.asStateFlow()
 
-    private val _remainingSeconds = MutableStateFlow(0)
-    val remainingSeconds: StateFlow<Int> = _remainingSeconds.asStateFlow()
+    private val _displaySeconds = MutableStateFlow(0)
+    val displaySeconds: StateFlow<Int> = _displaySeconds.asStateFlow()
+    // Alias for compatibility if needed, but better to update UI
+    val remainingSeconds: StateFlow<Int> = _displaySeconds.asStateFlow()
 
     private val _onTimerCompleted = MutableStateFlow(false)
     val onTimerCompleted: StateFlow<Boolean> = _onTimerCompleted.asStateFlow()
@@ -36,11 +43,18 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         loadTags()
+        loadDurations()
     }
 
     private fun loadTags() {
         viewModelScope.launch {
             _tags.value = tagRepository.getTags()
+        }
+    }
+
+    private fun loadDurations() {
+        viewModelScope.launch {
+            _durations.value = durationRepository.getDurations()
         }
     }
 
@@ -60,21 +74,43 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         loadTags()
     }
 
+    fun addDuration(minutes: Int) {
+        durationRepository.addDuration(minutes)
+        loadDurations()
+    }
+
+    fun deleteDuration(minutes: Int) {
+        durationRepository.removeDuration(minutes)
+        loadDurations()
+    }
+
     fun startTimer(task: Task) {
         _currentTask.value = task
         _timerState.value = TimerState.RUNNING
-        _remainingSeconds.value = task.durationMinutes * 60
+        
+        if (task.isStopwatch) {
+            _displaySeconds.value = 0
+        } else {
+            _displaySeconds.value = task.durationMinutes * 60
+        }
 
         timerJob?.cancel()
         timerJob = viewModelScope.launch {
-            while (_remainingSeconds.value > 0 && _timerState.value == TimerState.RUNNING) {
-                delay(1000)
-                _remainingSeconds.value = _remainingSeconds.value - 1
-            }
+            if (task.isStopwatch) {
+                while (_timerState.value == TimerState.RUNNING) {
+                    delay(1000)
+                    _displaySeconds.value = _displaySeconds.value + 1
+                }
+            } else {
+                while (_displaySeconds.value > 0 && _timerState.value == TimerState.RUNNING) {
+                    delay(1000)
+                    _displaySeconds.value = _displaySeconds.value - 1
+                }
 
-            if (_remainingSeconds.value <= 0) {
-                _timerState.value = TimerState.COMPLETED
-                _onTimerCompleted.value = true
+                if (_displaySeconds.value <= 0) {
+                    _timerState.value = TimerState.COMPLETED
+                    _onTimerCompleted.value = true
+                }
             }
         }
     }
@@ -89,15 +125,24 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     fun resumeTimer() {
         if (_timerState.value == TimerState.PAUSED) {
             _timerState.value = TimerState.RUNNING
+            val isStopwatch = _currentTask.value?.isStopwatch == true
+            
             timerJob = viewModelScope.launch {
-                while (_remainingSeconds.value > 0 && _timerState.value == TimerState.RUNNING) {
-                    delay(1000)
-                    _remainingSeconds.value = _remainingSeconds.value - 1
-                }
+                if (isStopwatch) {
+                    while (_timerState.value == TimerState.RUNNING) {
+                        delay(1000)
+                        _displaySeconds.value = _displaySeconds.value + 1
+                    }
+                } else {
+                    while (_displaySeconds.value > 0 && _timerState.value == TimerState.RUNNING) {
+                        delay(1000)
+                        _displaySeconds.value = _displaySeconds.value - 1
+                    }
 
-                if (_remainingSeconds.value <= 0) {
-                    _timerState.value = TimerState.COMPLETED
-                    _onTimerCompleted.value = true
+                    if (_displaySeconds.value <= 0) {
+                        _timerState.value = TimerState.COMPLETED
+                        _onTimerCompleted.value = true
+                    }
                 }
             }
         }
@@ -107,7 +152,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         timerJob?.cancel()
         _timerState.value = TimerState.IDLE
         _currentTask.value = null
-        _remainingSeconds.value = 0
+        _displaySeconds.value = 0
     }
 
     fun resetTimer() {

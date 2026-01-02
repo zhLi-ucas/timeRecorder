@@ -37,7 +37,10 @@ fun OptionsScreen(
     )
 
     val tags by actualViewModel.tags.collectAsState()
+    val durations by actualViewModel.durations.collectAsState()
+    
     var showAddTagDialog by remember { mutableStateOf(false) }
+    var showAddDurationDialog by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf<Tag?>(null) }
 
     Scaffold(
@@ -50,11 +53,6 @@ fun OptionsScreen(
                     }
                 }
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { showAddTagDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "添加标签")
-            }
         }
     ) { paddingValues ->
         LazyColumn(
@@ -65,11 +63,20 @@ fun OptionsScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item {
-                Text(
-                    text = "标签管理",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "标签管理",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    IconButton(onClick = { showAddTagDialog = true }) {
+                        Icon(Icons.Default.Add, contentDescription = "添加标签")
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
             }
 
             items(tags) { tag ->
@@ -77,6 +84,34 @@ fun OptionsScreen(
                     tag = tag,
                     onDelete = { actualViewModel.deleteTag(tag) },
                     onColorChange = { showColorPicker = tag }
+                )
+            }
+            
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "时长管理 (分钟)",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    IconButton(onClick = { showAddDurationDialog = true }) {
+                        Icon(Icons.Default.Add, contentDescription = "添加时长")
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            
+            items(durations) { duration ->
+                DurationItem(
+                    duration = duration,
+                    onDelete = { actualViewModel.deleteDuration(duration) }
                 )
             }
         }
@@ -109,6 +144,40 @@ fun OptionsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showAddTagDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+    
+    if (showAddDurationDialog) {
+        var newDuration by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showAddDurationDialog = false },
+            title = { Text("添加新时长 (分钟)") },
+            text = {
+                OutlinedTextField(
+                    value = newDuration,
+                    onValueChange = { if (it.all { char -> char.isDigit() }) newDuration = it },
+                    label = { Text("时长") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val durationInt = newDuration.toIntOrNull()
+                        if (durationInt != null && durationInt > 0) {
+                            actualViewModel.addDuration(durationInt)
+                            showAddDurationDialog = false
+                        }
+                    }
+                ) {
+                    Text("添加")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddDurationDialog = false }) {
                     Text("取消")
                 }
             }
@@ -234,4 +303,36 @@ fun ColorPickerDialog(
             }
         }
     )
+}
+
+@Composable
+fun DurationItem(
+    duration: Int,
+    onDelete: () -> Unit
+) {
+    Card(
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "${duration} 分钟",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+            IconButton(onClick = onDelete) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "删除时长",
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    }
 }

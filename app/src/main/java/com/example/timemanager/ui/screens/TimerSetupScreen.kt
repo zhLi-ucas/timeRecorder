@@ -29,21 +29,22 @@ fun TimerSetupScreen(
     viewModel: TimerViewModel? = null
 ) {
     val context = LocalContext.current
-    val actualViewModel: TimerViewModel = viewModel ?: viewModel(
+    val actualViewModel: TimerViewModel = viewModel(
         viewModelStoreOwner = context.applicationContext as androidx.lifecycle.ViewModelStoreOwner,
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(context.applicationContext as android.app.Application)
     )
     
     val tags by actualViewModel.tags.collectAsState()
+    val durations by actualViewModel.durations.collectAsState()
+    
     var tag by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var selectedDuration by remember { mutableStateOf<Int?>(null) }
+    var isStopwatchMode by remember { mutableStateOf(false) }
     
     var showAddTagDialog by remember { mutableStateOf(false) }
     var tagToDelete by remember { mutableStateOf<Tag?>(null) }
     
-    val presetDurations = listOf(15, 30, 45, 60, 90, 120) // 分钟
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -56,6 +57,24 @@ fun TimerSetupScreen(
             style = MaterialTheme.typography.headlineLarge,
             modifier = Modifier.padding(bottom = 8.dp)
         )
+
+        // Mode Selection
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center
+        ) {
+            FilterChip(
+                selected = !isStopwatchMode,
+                onClick = { isStopwatchMode = false },
+                label = { Text("倒计时") },
+                modifier = Modifier.padding(end = 8.dp)
+            )
+            FilterChip(
+                selected = isStopwatchMode,
+                onClick = { isStopwatchMode = true },
+                label = { Text("正计时") }
+            )
+        }
 
         // 标签选择区
         Text(
@@ -120,25 +139,26 @@ fun TimerSetupScreen(
             minLines = 3
         )
 
-        Text(
-            text = "选择时长",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 8.dp)
-        )
+        if (!isStopwatchMode) {
+            Text(
+                text = "选择时长",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 8.dp)
+            )
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            presetDurations.forEach { duration ->
-                val isSelected = selectedDuration == duration
-                FilterChip(
-                    selected = isSelected,
-                    onClick = { selectedDuration = if (isSelected) null else duration },
-                    label = { Text(formatDuration(duration)) },
-                    modifier = Modifier.weight(1f)
-                )
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                items(durations) { duration ->
+                    val isSelected = selectedDuration == duration
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { selectedDuration = if (isSelected) null else duration },
+                        label = { Text(formatDuration(duration)) }
+                    )
+                }
             }
         }
 
@@ -146,11 +166,12 @@ fun TimerSetupScreen(
 
         Button(
             onClick = {
-                if (tag.isNotBlank() && selectedDuration != null) {
+                if (tag.isNotBlank() && (isStopwatchMode || selectedDuration != null)) {
                     val task = Task(
                         tag = tag,
                         description = description,
-                        durationMinutes = selectedDuration!!
+                        durationMinutes = if (isStopwatchMode) 0 else selectedDuration!!,
+                        isStopwatch = isStopwatchMode
                     )
                     actualViewModel.startTimer(task)
                     
@@ -161,7 +182,7 @@ fun TimerSetupScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp),
-            enabled = tag.isNotBlank() && selectedDuration != null
+            enabled = tag.isNotBlank() && (isStopwatchMode || selectedDuration != null)
         ) {
             Text("开始", style = MaterialTheme.typography.titleLarge)
         }
