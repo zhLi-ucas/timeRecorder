@@ -1,7 +1,10 @@
 package com.example.timemanager.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.timemanager.data.Tag
+import com.example.timemanager.data.TagRepository
 import com.example.timemanager.data.Task
 import com.example.timemanager.data.TimerState
 import kotlinx.coroutines.Job
@@ -11,7 +14,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class TimerViewModel : ViewModel() {
+class TimerViewModel(application: Application) : AndroidViewModel(application) {
+    private val tagRepository = TagRepository(application)
+
+    private val _tags = MutableStateFlow<List<Tag>>(emptyList())
+    val tags: StateFlow<List<Tag>> = _tags.asStateFlow()
+
     private val _currentTask = MutableStateFlow<Task?>(null)
     val currentTask: StateFlow<Task?> = _currentTask.asStateFlow()
 
@@ -25,6 +33,27 @@ class TimerViewModel : ViewModel() {
     val onTimerCompleted: StateFlow<Boolean> = _onTimerCompleted.asStateFlow()
 
     private var timerJob: Job? = null
+
+    init {
+        loadTags()
+    }
+
+    private fun loadTags() {
+        viewModelScope.launch {
+            _tags.value = tagRepository.getTags()
+        }
+    }
+
+    fun addTag(name: String) {
+        val newTag = Tag.create(name)
+        tagRepository.addTag(newTag)
+        loadTags()
+    }
+
+    fun deleteTag(tag: Tag) {
+        tagRepository.removeTag(tag)
+        loadTags()
+    }
 
     fun startTimer(task: Task) {
         _currentTask.value = task
