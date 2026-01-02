@@ -26,7 +26,8 @@ fun AmbientDisplayScreen(
     onBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val actualViewModel = viewModel ?: viewModel(
+    val actualViewModel: TimerViewModel = viewModel ?: viewModel(
+        viewModelStoreOwner = context.applicationContext as androidx.lifecycle.ViewModelStoreOwner,
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(context.applicationContext as Application)
     )
 
