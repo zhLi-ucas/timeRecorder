@@ -4,6 +4,7 @@ import android.app.Application
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,6 +18,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -42,6 +44,11 @@ fun TimeRecordsScreen(
 
     val records by actualViewModel.records.collectAsState()
     val tags by actualViewModel.tags.collectAsState()
+
+    // Create a map for quick tag color lookup
+    val tagColorMap = remember(tags) { 
+        tags.associate { it.name to Color(it.colorArgb) } 
+    }
 
     var showEditDialog by remember { mutableStateOf(false) }
     var editingRecord by remember { mutableStateOf<TimeRecord?>(null) }
@@ -97,23 +104,38 @@ fun TimeRecordsScreen(
             ) {
                 groupedRecords.forEach { (dateString, dailyRecords) ->
                     stickyHeader {
+                        val headerText = formatDateHeader(dateString)
+                        val isToday = headerText == "今天"
+                        val headerBackgroundColor = if (isToday) {
+                            Color(0xFFE8F5E9) // Light Green (Green 50)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        }
+                        val headerContentColor = if (isToday) {
+                            Color(0xFF2E7D32) // Dark Green (Green 800)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            color = MaterialTheme.colorScheme.surfaceVariant
+                            color = headerBackgroundColor
                         ) {
                             Text(
-                                text = formatDateHeader(dateString),
+                                text = headerText,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = headerContentColor
                             )
                         }
                     }
 
                     items(dailyRecords) { record ->
+                        val tagColor = tagColorMap[record.tag] ?: MaterialTheme.colorScheme.surfaceVariant
                         TimeRecordItem(
                             record = record,
+                            tagColor = tagColor,
                             onClick = {
                                 editingRecord = record
                                 showEditDialog = true
@@ -150,11 +172,13 @@ fun TimeRecordsScreen(
 @Composable
 fun TimeRecordItem(
     record: TimeRecord,
+    tagColor: Color,
     onClick: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .background(tagColor.copy(alpha = 0.15f))
             .clickable(onClick = onClick)
             .padding(16.dp)
     ) {
@@ -170,7 +194,7 @@ fun TimeRecordItem(
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = formatDuration(record.durationSeconds),
+                text = formatDurationDisplay(record.durationSeconds),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium
             )
@@ -464,6 +488,16 @@ private fun formatDuration(seconds: Long): String {
     val h = seconds / 3600
     val m = (seconds % 3600) / 60
     return String.format("%02d:%02d", h, m)
+}
+
+private fun formatDurationDisplay(seconds: Long): String {
+    val h = seconds / 3600
+    val m = (seconds % 3600) / 60
+    return if (h > 0) {
+        "$h h $m min"
+    } else {
+        "$m min"
+    }
 }
 
 private fun formatTimeRange(start: Long, end: Long): String {
