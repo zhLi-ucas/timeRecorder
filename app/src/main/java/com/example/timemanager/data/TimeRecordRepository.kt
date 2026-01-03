@@ -44,6 +44,24 @@ class TimeRecordRepository(private val context: Context) {
         saveRecords(records)
     }
 
+    fun updateRecord(updatedRecord: TimeRecord) {
+        val records = getAllRecords().toMutableList()
+        val index = records.indexOfFirst { it.id == updatedRecord.id }
+        if (index != -1) {
+            records[index] = updatedRecord
+            saveRecords(records)
+        }
+    }
+
+    fun deleteRecord(recordId: String) {
+        val records = getAllRecords().toMutableList()
+        val index = records.indexOfFirst { it.id == recordId }
+        if (index != -1) {
+            records.removeAt(index)
+            saveRecords(records)
+        }
+    }
+
     private fun saveRecords(records: List<TimeRecord>) {
         val jsonArray = JSONArray()
         records.forEach { record ->

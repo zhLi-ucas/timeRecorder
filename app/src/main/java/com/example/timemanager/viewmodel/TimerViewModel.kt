@@ -71,6 +71,21 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun addRecord(record: TimeRecord) {
+        timeRecordRepository.addRecord(record)
+        loadRecords()
+    }
+
+    fun updateRecord(record: TimeRecord) {
+        timeRecordRepository.updateRecord(record)
+        loadRecords()
+    }
+
+    fun deleteRecord(recordId: String) {
+        timeRecordRepository.deleteRecord(recordId)
+        loadRecords()
+    }
+
     fun addTag(name: String) {
         val newTag = Tag.create(name)
         tagRepository.addTag(newTag)

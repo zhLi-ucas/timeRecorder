@@ -1,12 +1,18 @@
 package com.example.timemanager.ui.screens
 
 import android.app.Application
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.timemanager.data.Tag
 import com.example.timemanager.data.TimeRecord
 import com.example.timemanager.viewmodel.TimerViewModel
 import java.text.SimpleDateFormat
@@ -34,6 +41,10 @@ fun TimeRecordsScreen(
     )
 
     val records by actualViewModel.records.collectAsState()
+    val tags by actualViewModel.tags.collectAsState()
+
+    var showEditDialog by remember { mutableStateOf(false) }
+    var editingRecord by remember { mutableStateOf<TimeRecord?>(null) }
 
     // Group records by date
     val groupedRecords = remember(records) {
@@ -53,6 +64,16 @@ fun TimeRecordsScreen(
                     }
                 }
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = {
+                    editingRecord = null
+                    showEditDialog = true
+                }
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "添加记录")
+            }
         }
     ) { paddingValues ->
         if (records.isEmpty()) {
@@ -91,20 +112,50 @@ fun TimeRecordsScreen(
                     }
 
                     items(dailyRecords) { record ->
-                        TimeRecordItem(record)
+                        TimeRecordItem(
+                            record = record,
+                            onClick = {
+                                editingRecord = record
+                                showEditDialog = true
+                            }
+                        )
                         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     }
                 }
             }
         }
     }
+
+    if (showEditDialog) {
+        EditTimeRecordDialog(
+            record = editingRecord,
+            allTags = tags,
+            onDismiss = { showEditDialog = false },
+            onConfirm = { record ->
+                if (editingRecord == null) {
+                    actualViewModel.addRecord(record)
+                } else {
+                    actualViewModel.updateRecord(record)
+                }
+                showEditDialog = false
+            },
+            onDelete = { record ->
+                actualViewModel.deleteRecord(record.id)
+                showEditDialog = false
+            }
+        )
+    }
 }
 
 @Composable
-fun TimeRecordItem(record: TimeRecord) {
+fun TimeRecordItem(
+    record: TimeRecord,
+    onClick: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)
             .padding(16.dp)
     ) {
         Row(
@@ -150,6 +201,156 @@ fun TimeRecordItem(record: TimeRecord) {
             )
         }
     }
+}
+
+@Composable
+fun EditTimeRecordDialog(
+    record: TimeRecord?,
+    allTags: List<Tag>,
+    onDismiss: () -> Unit,
+    onConfirm: (TimeRecord) -> Unit,
+    onDelete: (TimeRecord) -> Unit
+) {
+    var selectedTag by remember { mutableStateOf(record?.tag ?: if (allTags.isNotEmpty()) allTags[0].name else "Default") }
+    var startTime by remember { mutableStateOf(record?.startTime ?: System.currentTimeMillis()) }
+    var endTime by remember { mutableStateOf(record?.endTime ?: System.currentTimeMillis()) }
+    var description by remember { mutableStateOf(record?.description ?: "") }
+
+    // Ensure endTime >= startTime
+    if (endTime < startTime) endTime = startTime
+
+    val context = LocalContext.current
+    val calendar = Calendar.getInstance()
+
+    fun showDateTimePicker(initialTime: Long, onTimeSelected: (Long) -> Unit) {
+        calendar.timeInMillis = initialTime
+        DatePickerDialog(
+            context,
+            { _, year, month, day ->
+                calendar.set(Calendar.YEAR, year)
+                calendar.set(Calendar.MONTH, month)
+                calendar.set(Calendar.DAY_OF_MONTH, day)
+                
+                TimePickerDialog(
+                    context,
+                    { _, hour, minute ->
+                        calendar.set(Calendar.HOUR_OF_DAY, hour)
+                        calendar.set(Calendar.MINUTE, minute)
+                        onTimeSelected(calendar.timeInMillis)
+                    },
+                    calendar.get(Calendar.HOUR_OF_DAY),
+                    calendar.get(Calendar.MINUTE),
+                    true
+                ).show()
+            },
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH),
+            calendar.get(Calendar.DAY_OF_MONTH)
+        ).show()
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (record == null) "添加记录" else "编辑记录") },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Tag Selection
+                Text("标签", style = MaterialTheme.typography.labelLarge)
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(allTags) { tag ->
+                        FilterChip(
+                            selected = tag.name == selectedTag,
+                            onClick = { selectedTag = tag.name },
+                            label = { Text(tag.name) }
+                        )
+                    }
+                    if (allTags.isEmpty()) {
+                        item {
+                            Text("无可用标签，请在设置中添加", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+
+                // Time Selection
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("开始时间", style = MaterialTheme.typography.labelMedium)
+                        TextButton(onClick = { showDateTimePicker(startTime) { startTime = it } }) {
+                            Text(SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(startTime)))
+                        }
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("结束时间", style = MaterialTheme.typography.labelMedium)
+                        TextButton(onClick = { showDateTimePicker(endTime) { endTime = it } }) {
+                            Text(SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(endTime)))
+                        }
+                    }
+                }
+
+                // Duration Display
+                Text(
+                    text = "持续时间: ${formatDuration((endTime - startTime) / 1000)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+
+                // Description
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { if (it.length <= 50) description = it },
+                    label = { Text("描述") },
+                    modifier = Modifier.fillMaxWidth(),
+                    supportingText = { Text("${description.length}/50") },
+                    maxLines = 3
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val durationSeconds = (endTime - startTime) / 1000
+                    if (durationSeconds >= 0) {
+                        onConfirm(
+                            TimeRecord(
+                                id = record?.id ?: UUID.randomUUID().toString(),
+                                tag = selectedTag,
+                                startTime = startTime,
+                                endTime = endTime,
+                                durationSeconds = durationSeconds,
+                                description = description
+                            )
+                        )
+                    }
+                },
+                enabled = selectedTag.isNotBlank() && endTime >= startTime
+            ) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            Row {
+                if (record != null) {
+                    TextButton(
+                        onClick = { onDelete(record) },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("删除")
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("取消")
+                }
+            }
+        }
+    )
 }
 
 private fun formatDateHeader(dateString: String): String {
