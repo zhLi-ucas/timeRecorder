@@ -211,43 +211,98 @@ fun EditTimeRecordDialog(
     onConfirm: (TimeRecord) -> Unit,
     onDelete: (TimeRecord) -> Unit
 ) {
-    var selectedTag by remember { mutableStateOf(record?.tag ?: if (allTags.isNotEmpty()) allTags[0].name else "Default") }
-    var startTime by remember { mutableStateOf(record?.startTime ?: System.currentTimeMillis()) }
-    var endTime by remember { mutableStateOf(record?.endTime ?: System.currentTimeMillis()) }
-    var description by remember { mutableStateOf(record?.description ?: "") }
-
-    // Ensure endTime >= startTime
-    if (endTime < startTime) endTime = startTime
-
+    // Initial State Initialization
     val context = LocalContext.current
     val calendar = Calendar.getInstance()
+    
+    // Initialize with record data or current time
+    val initStartTime = record?.startTime ?: System.currentTimeMillis()
+    val initEndTime = record?.endTime ?: System.currentTimeMillis()
+    
+    // Parse initial values
+    val startCal = Calendar.getInstance().apply { timeInMillis = initStartTime }
+    val endCal = Calendar.getInstance().apply { timeInMillis = initEndTime }
+    
+    // State variables
+    var selectedDate by remember { mutableStateOf(startCal.timeInMillis) }
+    var isNextDay by remember { 
+        mutableStateOf(
+            endCal.get(Calendar.YEAR) > startCal.get(Calendar.YEAR) || 
+            endCal.get(Calendar.DAY_OF_YEAR) > startCal.get(Calendar.DAY_OF_YEAR)
+        )
+    }
+    
+    var startHour by remember { mutableStateOf(startCal.get(Calendar.HOUR_OF_DAY)) }
+    var startMinute by remember { mutableStateOf(startCal.get(Calendar.MINUTE)) }
+    
+    var endHour by remember { mutableStateOf(endCal.get(Calendar.HOUR_OF_DAY)) }
+    var endMinute by remember { mutableStateOf(endCal.get(Calendar.MINUTE)) }
+    
+    var selectedTag by remember { mutableStateOf(record?.tag ?: if (allTags.isNotEmpty()) allTags[0].name else "Default") }
+    var description by remember { mutableStateOf(record?.description ?: "") }
 
-    fun showDateTimePicker(initialTime: Long, onTimeSelected: (Long) -> Unit) {
-        calendar.timeInMillis = initialTime
+    // Helper functions for Dialogs
+    fun showDatePicker() {
+        calendar.timeInMillis = selectedDate
         DatePickerDialog(
             context,
             { _, year, month, day ->
-                calendar.set(Calendar.YEAR, year)
-                calendar.set(Calendar.MONTH, month)
-                calendar.set(Calendar.DAY_OF_MONTH, day)
-                
-                TimePickerDialog(
-                    context,
-                    { _, hour, minute ->
-                        calendar.set(Calendar.HOUR_OF_DAY, hour)
-                        calendar.set(Calendar.MINUTE, minute)
-                        onTimeSelected(calendar.timeInMillis)
-                    },
-                    calendar.get(Calendar.HOUR_OF_DAY),
-                    calendar.get(Calendar.MINUTE),
-                    true
-                ).show()
+                calendar.set(year, month, day)
+                selectedDate = calendar.timeInMillis
             },
             calendar.get(Calendar.YEAR),
             calendar.get(Calendar.MONTH),
             calendar.get(Calendar.DAY_OF_MONTH)
         ).show()
     }
+
+    fun showTimePicker(isStart: Boolean) {
+        val initialHour = if (isStart) startHour else endHour
+        val initialMinute = if (isStart) startMinute else endMinute
+        
+        TimePickerDialog(
+            context,
+            { _, hour, minute ->
+                if (isStart) {
+                    startHour = hour
+                    startMinute = minute
+                } else {
+                    endHour = hour
+                    endMinute = minute
+                }
+            },
+            initialHour,
+            initialMinute,
+            true
+        ).show()
+    }
+
+    // Calculate final timestamps
+    val finalStartTime = remember(selectedDate, startHour, startMinute) {
+        Calendar.getInstance().apply {
+            timeInMillis = selectedDate
+            set(Calendar.HOUR_OF_DAY, startHour)
+            set(Calendar.MINUTE, startMinute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+
+    val finalEndTime = remember(selectedDate, isNextDay, endHour, endMinute) {
+        Calendar.getInstance().apply {
+            timeInMillis = selectedDate
+            if (isNextDay) {
+                add(Calendar.DAY_OF_YEAR, 1)
+            }
+            set(Calendar.HOUR_OF_DAY, endHour)
+            set(Calendar.MINUTE, endMinute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+    
+    val isValid = if (!isNextDay) finalEndTime >= finalStartTime else true
+    val durationSeconds = (finalEndTime - finalStartTime) / 1000
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -276,6 +331,28 @@ fun EditTimeRecordDialog(
                     }
                 }
 
+                // Date Selection
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("日期", style = MaterialTheme.typography.labelMedium)
+                        TextButton(onClick = { showDatePicker() }) {
+                            Text(SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(selectedDate)))
+                        }
+                    }
+                    
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("跨日(+1天)", style = MaterialTheme.typography.bodyMedium)
+                        Switch(
+                            checked = isNextDay,
+                            onCheckedChange = { isNextDay = it }
+                        )
+                    }
+                }
+
                 // Time Selection
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -283,21 +360,27 @@ fun EditTimeRecordDialog(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("开始时间", style = MaterialTheme.typography.labelMedium)
-                        TextButton(onClick = { showDateTimePicker(startTime) { startTime = it } }) {
-                            Text(SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(startTime)))
+                        TextButton(onClick = { showTimePicker(true) }) {
+                            Text(String.format("%02d:%02d", startHour, startMinute))
                         }
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Text("结束时间", style = MaterialTheme.typography.labelMedium)
-                        TextButton(onClick = { showDateTimePicker(endTime) { endTime = it } }) {
-                            Text(SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(endTime)))
+                        TextButton(onClick = { showTimePicker(false) }) {
+                            Text(
+                                text = String.format("%02d:%02d", endHour, endMinute),
+                                color = if (isValid) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                            )
+                        }
+                        if (!isValid) {
+                            Text("结束时间不能早于开始时间", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
 
                 // Duration Display
                 Text(
-                    text = "持续时间: ${formatDuration((endTime - startTime) / 1000)}",
+                    text = "持续时间: ${formatDuration(durationSeconds)}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.secondary
                 )
@@ -316,21 +399,20 @@ fun EditTimeRecordDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    val durationSeconds = (endTime - startTime) / 1000
                     if (durationSeconds >= 0) {
                         onConfirm(
                             TimeRecord(
                                 id = record?.id ?: UUID.randomUUID().toString(),
                                 tag = selectedTag,
-                                startTime = startTime,
-                                endTime = endTime,
+                                startTime = finalStartTime,
+                                endTime = finalEndTime,
                                 durationSeconds = durationSeconds,
                                 description = description
                             )
                         )
                     }
                 },
-                enabled = selectedTag.isNotBlank() && endTime >= startTime
+                enabled = selectedTag.isNotBlank() && isValid
             ) {
                 Text("保存")
             }
@@ -381,8 +463,7 @@ private fun isYesterday(today: Calendar, target: Calendar): Boolean {
 private fun formatDuration(seconds: Long): String {
     val h = seconds / 3600
     val m = (seconds % 3600) / 60
-    val s = seconds % 60
-    return String.format("%02d:%02d:%02d", h, m, s)
+    return String.format("%02d:%02d", h, m)
 }
 
 private fun formatTimeRange(start: Long, end: Long): String {
