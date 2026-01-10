@@ -6,13 +6,22 @@ import android.app.TimePickerDialog
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.pager.PagerState
+import kotlinx.coroutines.launch
+import java.util.concurrent.TimeUnit
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -44,6 +53,88 @@ fun TimeRecordsScreen(
 
     val records by actualViewModel.records.collectAsState()
     val tags by actualViewModel.tags.collectAsState()
+    
+    // State for date navigation using Pager
+    val initialPage = Int.MAX_VALUE / 2
+    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { Int.MAX_VALUE })
+    val scope = rememberCoroutineScope()
+    
+    // Base date for calculating page dates (Today)
+    val baseDate = remember { Calendar.getInstance() }
+    
+    // Calculate current date from pager state
+    val currentDate = remember(pagerState.currentPage) {
+        val date = baseDate.clone() as Calendar
+        date.add(Calendar.DAY_OF_YEAR, pagerState.currentPage - initialPage)
+        date
+    }
+    
+    // Helper function to calculate date for any page
+    fun getDateForPage(page: Int): Calendar {
+        val date = baseDate.clone() as Calendar
+        date.add(Calendar.DAY_OF_YEAR, page - initialPage)
+        return date
+    }
+
+    // Date navigation helper functions
+    fun previousDay() {
+        scope.launch {
+            pagerState.animateScrollToPage(pagerState.currentPage - 1)
+        }
+    }
+
+    fun nextDay() {
+        scope.launch {
+            pagerState.animateScrollToPage(pagerState.currentPage + 1)
+        }
+    }
+
+    fun showDatePicker() {
+        DatePickerDialog(
+            context,
+            { _, year, month, day ->
+                val selectedDate = Calendar.getInstance()
+                selectedDate.set(year, month, day)
+                
+                // Calculate page difference
+                val diffInMillis = selectedDate.timeInMillis - baseDate.timeInMillis
+                val diffDays = TimeUnit.MILLISECONDS.toDays(diffInMillis).toInt()
+                
+                // Adjust for potential timezone/DST issues with simple division
+                // A more robust way:
+                val tempBase = baseDate.clone() as Calendar
+                // We need to find exact day difference. 
+                // Since this is UI logic, we can iterate or use library if needed.
+                // Simple approximation is usually fine if we stick to noon or handle it carefully.
+                // Let's use a loop for small diffs or exact calculation.
+                
+                // Better approach: use java.time if possible, but sticking to Calendar:
+                // We'll trust the simple diff for now, but to be safe, let's recalculate target page date
+                val targetPage = initialPage + diffDays
+                
+                // Verify close pages to handle day boundary issues (e.g. 23h vs 25h days)
+                var bestPage = targetPage
+                var minDiff = Long.MAX_VALUE
+                
+                // Search around the estimated page to find the exact date match
+                for (offset in -1..1) {
+                    val p = targetPage + offset
+                    val d = getDateForPage(p)
+                    if (isSameDay(d, selectedDate)) {
+                        bestPage = p
+                        break
+                    }
+                }
+                
+                scope.launch {
+                    pagerState.scrollToPage(bestPage)
+                }
+            },
+            currentDate.get(Calendar.YEAR),
+            currentDate.get(Calendar.MONTH),
+            currentDate.get(Calendar.DAY_OF_MONTH)
+        ).show()
+    }
 
     // Create a map for quick tag color lookup
     val tagColorMap = remember(tags) { 
@@ -53,14 +144,6 @@ fun TimeRecordsScreen(
     var showEditDialog by remember { mutableStateOf(false) }
     var editingRecord by remember { mutableStateOf<TimeRecord?>(null) }
 
-    // Group records by date
-    val groupedRecords = remember(records) {
-        records.groupBy { record ->
-            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-            sdf.format(Date(record.startTime))
-        }
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -69,79 +152,113 @@ fun TimeRecordsScreen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "返回")
                     }
+                },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            editingRecord = null
+                            showEditDialog = true
+                        }
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "添加记录")
+                    }
                 }
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = {
-                    editingRecord = null
-                    showEditDialog = true
-                }
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "添加记录")
-            }
         }
     ) { paddingValues ->
-        if (records.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "暂无记录",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-            ) {
-                groupedRecords.forEach { (dateString, dailyRecords) ->
-                    stickyHeader {
-                        val headerText = formatDateHeader(dateString)
-                        val isToday = headerText == "今天"
-                        val headerBackgroundColor = if (isToday) {
-                            Color(0xFFE8F5E9) // Light Green (Green 50)
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant
-                        }
-                        val headerContentColor = if (isToday) {
-                            Color(0xFF2E7D32) // Dark Green (Green 800)
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            // Date Navigation Bar
+            val isToday = isSameDay(currentDate, Calendar.getInstance())
+            val navBarColor = if (isToday) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.surfaceVariant
 
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            color = headerBackgroundColor
-                        ) {
-                            Text(
-                                text = headerText,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = headerContentColor
-                            )
-                        }
+            Surface(
+                color = navBarColor,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { previousDay() }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "前一天")
                     }
-
-                    items(dailyRecords) { record ->
-                        val tagColor = tagColorMap[record.tag] ?: MaterialTheme.colorScheme.surfaceVariant
-                        TimeRecordItem(
-                            record = record,
-                            tagColor = tagColor,
-                            onClick = {
-                                editingRecord = record
-                                showEditDialog = true
-                            }
+                    
+                    Row(
+                        modifier = Modifier
+                            .clickable { showDatePicker() }
+                            .padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.DateRange, 
+                            contentDescription = "选择日期",
+                            modifier = Modifier.size(20.dp),
+                            tint = if (isToday) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary
                         )
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = formatDateHeader(currentDate),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isToday) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    
+                    IconButton(onClick = { nextDay() }) {
+                        Icon(Icons.Default.ArrowForward, contentDescription = "后一天")
+                    }
+                }
+            }
+
+            // Records List with Pager Support
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val pageDate = getDateForPage(page)
+                
+                // Filter records for the page's date
+                val pageRecords = remember(records, page) {
+                    records.filter { record ->
+                        val recordCal = Calendar.getInstance().apply { timeInMillis = record.startTime }
+                        isSameDay(pageDate, recordCal)
+                    }.sortedBy { it.startTime } // Sorted Ascending (Morning to Night)
+                }
+
+                if (pageRecords.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "暂无记录",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(pageRecords) { record ->
+                            val tagColor = tagColorMap[record.tag] ?: MaterialTheme.colorScheme.surfaceVariant
+                            TimeRecordItem(
+                                record = record,
+                                tagColor = tagColor,
+                                onClick = {
+                                    editingRecord = record
+                                    showEditDialog = true
+                                }
+                            )
+                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        }
                     }
                 }
             }
@@ -152,6 +269,7 @@ fun TimeRecordsScreen(
         EditTimeRecordDialog(
             record = editingRecord,
             allTags = tags,
+            initialDate = currentDate.timeInMillis, // Pass current selected date
             onDismiss = { showEditDialog = false },
             onConfirm = { record ->
                 if (editingRecord == null) {
@@ -231,6 +349,7 @@ fun TimeRecordItem(
 fun EditTimeRecordDialog(
     record: TimeRecord?,
     allTags: List<Tag>,
+    initialDate: Long = System.currentTimeMillis(),
     onDismiss: () -> Unit,
     onConfirm: (TimeRecord) -> Unit,
     onDelete: (TimeRecord) -> Unit
@@ -240,8 +359,8 @@ fun EditTimeRecordDialog(
     val calendar = Calendar.getInstance()
     
     // Initialize with record data or current time
-    val initStartTime = record?.startTime ?: System.currentTimeMillis()
-    val initEndTime = record?.endTime ?: System.currentTimeMillis()
+    val initStartTime = record?.startTime ?: initialDate
+    val initEndTime = record?.endTime ?: initialDate
     
     // Parse initial values
     val startCal = Calendar.getInstance().apply { timeInMillis = initStartTime }
@@ -338,8 +457,11 @@ fun EditTimeRecordDialog(
             ) {
                 // Tag Selection
                 Text("标签", style = MaterialTheme.typography.labelLarge)
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                LazyHorizontalGrid(
+                    rows = GridCells.Fixed(2),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth().height(100.dp)
                 ) {
                     items(allTags) { tag ->
                         FilterChip(
@@ -459,17 +581,13 @@ fun EditTimeRecordDialog(
     )
 }
 
-private fun formatDateHeader(dateString: String): String {
-    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-    val date = sdf.parse(dateString) ?: return dateString
-    
+private fun formatDateHeader(date: Calendar): String {
     val today = Calendar.getInstance()
-    val recordDate = Calendar.getInstance().apply { time = date }
     
     return when {
-        isSameDay(today, recordDate) -> "今天"
-        isYesterday(today, recordDate) -> "昨天"
-        else -> SimpleDateFormat("yyyy年MM月dd日", Locale.getDefault()).format(date)
+        isSameDay(today, date) -> "今天"
+        isYesterday(today, date) -> "昨天"
+        else -> SimpleDateFormat("yyyy年MM月dd日", Locale.getDefault()).format(date.time)
     }
 }
 
