@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -14,13 +15,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.timemanager.data.Tag
+import com.example.timemanager.ui.components.ReminderType
 import com.example.timemanager.viewmodel.TimerViewModel
 import kotlin.random.Random
 
@@ -37,10 +39,11 @@ fun OptionsScreen(
     )
 
     val tags by actualViewModel.tags.collectAsState()
-    val durations by actualViewModel.durations.collectAsState()
+    val waterInterval by actualViewModel.waterInterval.collectAsState()
+    val standInterval by actualViewModel.standInterval.collectAsState()
     
     var showAddTagDialog by remember { mutableStateOf(false) }
-    var showAddDurationDialog by remember { mutableStateOf(false) }
+    var showEditReminderDialog by remember { mutableStateOf<ReminderType?>(null) }
     var showColorPicker by remember { mutableStateOf<Tag?>(null) }
 
     Scaffold(
@@ -62,6 +65,7 @@ fun OptionsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            // --- Tag Management ---
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -87,36 +91,38 @@ fun OptionsScreen(
                 )
             }
             
+            // --- Reminder Settings ---
             item {
                 Spacer(modifier = Modifier.height(24.dp))
                 HorizontalDivider()
                 Spacer(modifier = Modifier.height(24.dp))
                 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "时长管理 (分钟)",
-                        style = MaterialTheme.typography.titleLarge
-                    )
-                    IconButton(onClick = { showAddDurationDialog = true }) {
-                        Icon(Icons.Default.Add, contentDescription = "添加时长")
-                    }
-                }
+                Text(
+                    text = "提醒设置",
+                    style = MaterialTheme.typography.titleLarge
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Water Reminder
+                ReminderSettingItem(
+                    title = "喝水提醒间隔",
+                    value = "${waterInterval} 分钟",
+                    onClick = { showEditReminderDialog = ReminderType.WATER }
+                )
+                
                 Spacer(modifier = Modifier.height(8.dp))
-            }
-            
-            items(durations) { duration ->
-                DurationItem(
-                    duration = duration,
-                    onDelete = { actualViewModel.deleteDuration(duration) }
+                
+                // Stand Reminder
+                ReminderSettingItem(
+                    title = "久坐起身提醒间隔",
+                    value = "${standInterval} 分钟",
+                    onClick = { showEditReminderDialog = ReminderType.STAND }
                 )
             }
         }
     }
 
+    // Add Tag Dialog
     if (showAddTagDialog) {
         var newTagName by remember { mutableStateOf("") }
         AlertDialog(
@@ -150,34 +156,42 @@ fun OptionsScreen(
         )
     }
     
-    if (showAddDurationDialog) {
-        var newDuration by remember { mutableStateOf("") }
+    // Edit Reminder Dialog
+    showEditReminderDialog?.let { type ->
+        var intervalText by remember { mutableStateOf(
+            when (type) {
+                ReminderType.WATER -> waterInterval.toString()
+                ReminderType.STAND -> standInterval.toString()
+            }
+        )}
+        
         AlertDialog(
-            onDismissRequest = { showAddDurationDialog = false },
-            title = { Text("添加新时长 (分钟)") },
+            onDismissRequest = { showEditReminderDialog = null },
+            title = { Text(if (type == ReminderType.WATER) "设置喝水间隔" else "设置久坐间隔") },
             text = {
                 OutlinedTextField(
-                    value = newDuration,
-                    onValueChange = { if (it.all { char -> char.isDigit() }) newDuration = it },
-                    label = { Text("时长") },
-                    singleLine = true
+                    value = intervalText,
+                    onValueChange = { if (it.all { char -> char.isDigit() }) intervalText = it },
+                    label = { Text("分钟") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        val durationInt = newDuration.toIntOrNull()
-                        if (durationInt != null && durationInt > 0) {
-                            actualViewModel.addDuration(durationInt)
-                            showAddDurationDialog = false
+                        val minutes = intervalText.toIntOrNull()
+                        if (minutes != null && minutes > 0) {
+                            actualViewModel.setReminderInterval(type, minutes)
+                            showEditReminderDialog = null
                         }
                     }
                 ) {
-                    Text("添加")
+                    Text("确定")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showAddDurationDialog = false }) {
+                TextButton(onClick = { showEditReminderDialog = null }) {
                     Text("取消")
                 }
             }
@@ -235,6 +249,38 @@ fun TagItem(
                     tint = MaterialTheme.colorScheme.error
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun ReminderSettingItem(
+    title: String,
+    value: String,
+    onClick: () -> Unit
+) {
+    Card(
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = Modifier.clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }
@@ -303,36 +349,4 @@ fun ColorPickerDialog(
             }
         }
     )
-}
-
-@Composable
-fun DurationItem(
-    duration: Int,
-    onDelete: () -> Unit
-) {
-    Card(
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "${duration} 分钟",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium
-            )
-            IconButton(onClick = onDelete) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "删除时长",
-                    tint = MaterialTheme.colorScheme.error
-                )
-            }
-        }
-    }
 }

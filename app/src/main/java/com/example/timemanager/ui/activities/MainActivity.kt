@@ -1,5 +1,6 @@
 package com.example.timemanager.ui.activities
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -16,7 +17,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.timemanager.ui.screens.HomeScreen
 import com.example.timemanager.ui.screens.OptionsScreen
 import com.example.timemanager.ui.screens.TimeRecordsScreen
-import com.example.timemanager.ui.screens.TimerSetupScreen
 import com.example.timemanager.ui.theme.TimeManagerTheme
 import com.example.timemanager.viewmodel.TimerViewModel
 
@@ -39,7 +39,6 @@ class MainActivity : ComponentActivity() {
 
 enum class Screen {
     HOME,
-    TIMER_SETUP,
     OPTIONS,
     RECORDS
 }
@@ -60,18 +59,14 @@ fun AppContent() {
     when (currentScreen) {
         Screen.HOME -> {
             HomeScreen(
-                onNavigateToTimer = { currentScreen = Screen.TIMER_SETUP },
+                onNavigateToTimer = {
+                    val intent = Intent(context, AmbientDisplayActivity::class.java)
+                    context.startActivity(intent)
+                },
                 onNavigateToOptions = { currentScreen = Screen.OPTIONS },
-                onNavigateToRecords = { currentScreen = Screen.RECORDS }
-            )
-        }
-        Screen.TIMER_SETUP -> {
-            TimerSetupScreen(
+                onNavigateToRecords = { currentScreen = Screen.RECORDS },
                 viewModel = timerViewModel
             )
-            BackHandler {
-                currentScreen = Screen.HOME
-            }
         }
         Screen.OPTIONS -> {
             OptionsScreen(

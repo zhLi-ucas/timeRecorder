@@ -1,13 +1,7 @@
 package com.example.timemanager.ui.screens
 
 import android.app.Application
-import android.content.Context
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-// import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -19,8 +13,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.timemanager.service.NotificationService
-import com.example.timemanager.TimeManagerApplication
+import com.example.timemanager.ui.components.ReminderButton
+import com.example.timemanager.ui.components.ReminderType
 import com.example.timemanager.viewmodel.TimerViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -37,23 +31,10 @@ fun AmbientDisplayScreen(
     )
 
     val currentTask by actualViewModel.currentTask.collectAsState()
-    val remainingSeconds by actualViewModel.remainingSeconds.collectAsState()
-    val timerState by actualViewModel.timerState.collectAsState()
-    val onTimerCompleted by actualViewModel.onTimerCompleted.collectAsState()
+    val waterProgress by actualViewModel.waterProgress.collectAsState()
+    val standProgress by actualViewModel.standProgress.collectAsState()
 
-    // 监听计时结束事件
-    LaunchedEffect(onTimerCompleted) {
-        if (onTimerCompleted && currentTask != null) {
-            NotificationService.showTimerCompletedNotification(
-                context,
-                currentTask!!.tag,
-                currentTask!!.description
-            )
-            actualViewModel.resetTimerCompletedFlag()
-        }
-    }
-
-    // 当前时间
+    // Current Time
     val currentTime = remember {
         mutableStateOf(getCurrentTime())
     }
@@ -61,7 +42,7 @@ fun AmbientDisplayScreen(
         mutableStateOf(getCurrentDate())
     }
 
-    // 每秒更新时间
+    // Update time every second
     LaunchedEffect(Unit) {
         while (true) {
             kotlinx.coroutines.delay(1000)
@@ -80,12 +61,11 @@ fun AmbientDisplayScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(64.dp)
         ) {
-            // 左侧：时间与日期
+            // Left: Clock & Date
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                // 当前时间
                 Text(
                     text = currentTime.value,
                     style = MaterialTheme.typography.displayLarge.copy(
@@ -95,7 +75,6 @@ fun AmbientDisplayScreen(
                     color = MaterialTheme.colorScheme.onBackground
                 )
 
-                // 日期
                 Text(
                     text = currentDate.value,
                     style = MaterialTheme.typography.titleLarge,
@@ -103,7 +82,7 @@ fun AmbientDisplayScreen(
                 )
             }
 
-            // 右侧：当前任务与倒计时
+            // Right: Task Info & Reminders (No Timer Text)
             if (currentTask != null) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -111,7 +90,7 @@ fun AmbientDisplayScreen(
                     modifier = Modifier.width(IntrinsicSize.Max)
                 ) {
                     Text(
-                        text = currentTask!!.tag,
+                        text = currentTask!!.tag, // Access name property
                         style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
@@ -126,27 +105,24 @@ fun AmbientDisplayScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(32.dp))
 
-                    // 倒计时
-                    if (timerState == com.example.timemanager.data.TimerState.RUNNING ||
-                        timerState == com.example.timemanager.data.TimerState.PAUSED) {
-                        Text(
-                            text = formatRemainingTime(remainingSeconds),
-                            style = MaterialTheme.typography.displayMedium.copy(
-                                fontSize = 80.sp,
-                                fontWeight = FontWeight.Medium
-                            ),
-                            color = MaterialTheme.colorScheme.secondary
+                    // Reminders
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(32.dp)
+                    ) {
+                        ReminderButton(
+                            type = ReminderType.WATER,
+                            progress = waterProgress,
+                            onClick = { actualViewModel.resetReminder(ReminderType.WATER) },
+                            modifier = Modifier.size(80.dp) // Larger in focus mode
                         )
-                    }
-
-                    if (timerState == com.example.timemanager.data.TimerState.COMPLETED) {
-                        Text(
-                            text = "时间到！",
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = MaterialTheme.colorScheme.error,
-                            fontWeight = FontWeight.Bold
+                        
+                        ReminderButton(
+                            type = ReminderType.STAND,
+                            progress = standProgress,
+                            onClick = { actualViewModel.resetReminder(ReminderType.STAND) },
+                            modifier = Modifier.size(80.dp)
                         )
                     }
                 }
@@ -155,31 +131,6 @@ fun AmbientDisplayScreen(
                     text = "暂无任务",
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                )
-            }
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp)
-    ) {
-        if (currentTask != null) {
-            FloatingActionButton(
-                onClick = {
-                    actualViewModel.stopTimer()
-                    onBack()
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp),
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-                contentColor = MaterialTheme.colorScheme.onErrorContainer
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "停止/退出"
                 )
             }
         }
@@ -195,15 +146,3 @@ private fun getCurrentDate(): String {
     val sdf = SimpleDateFormat("yyyy年MM月dd日 EEEE", Locale.getDefault())
     return sdf.format(Date())
 }
-
-private fun formatRemainingTime(seconds: Int): String {
-    val hours = seconds / 3600
-    val minutes = (seconds % 3600) / 60
-    val secs = seconds % 60
-
-    return when {
-        hours > 0 -> String.format("%02d:%02d:%02d", hours, minutes, secs)
-        else -> String.format("%02d:%02d", minutes, secs)
-    }
-}
-
