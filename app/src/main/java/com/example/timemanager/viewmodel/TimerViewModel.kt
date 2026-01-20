@@ -5,6 +5,8 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.timemanager.data.DurationRepository
+import com.example.timemanager.data.HealthRecord
+import com.example.timemanager.data.HealthRecordRepository
 import com.example.timemanager.data.Tag
 import com.example.timemanager.data.TagRepository
 import com.example.timemanager.data.Task
@@ -24,12 +26,14 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     private val tagRepository = TagRepository(application)
     private val durationRepository = DurationRepository(application)
     private val timeRecordRepository = TimeRecordRepository(application)
+    private val healthRecordRepository = HealthRecordRepository(application)
     private val prefs = application.getSharedPreferences("timer_prefs", Context.MODE_PRIVATE)
 
     companion object {
         private const val KEY_START_TIME = "ongoing_start_time"
         private const val KEY_TAG_NAME = "ongoing_tag_name"
         private const val KEY_DESCRIPTION = "ongoing_description"
+        private const val KEY_CREATION_TYPE = "ongoing_creation_type"
         
         // Reminder Keys
         private const val KEY_WATER_INTERVAL = "water_interval_mins"
@@ -171,7 +175,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun startTask(tag: Tag, description: String) {
+    fun startTask(tag: Tag, description: String, creationType: String = "NORMAL") {
         val startTime = System.currentTimeMillis()
         
         // Persist state
@@ -179,6 +183,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             putLong(KEY_START_TIME, startTime)
             putString(KEY_TAG_NAME, tag.name)
             putString(KEY_DESCRIPTION, description)
+            putString(KEY_CREATION_TYPE, creationType)
             apply()
         }
 
@@ -201,6 +206,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
 
         val tagName = prefs.getString(KEY_TAG_NAME, "") ?: ""
         val description = prefs.getString(KEY_DESCRIPTION, "") ?: ""
+        val creationType = prefs.getString(KEY_CREATION_TYPE, "NORMAL") ?: "NORMAL"
         val endTime = System.currentTimeMillis()
         val durationSeconds = (endTime - startTime) / 1000
 
@@ -210,7 +216,8 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
                 startTime = startTime,
                 endTime = endTime,
                 durationSeconds = durationSeconds,
-                description = description
+                description = description,
+                creationType = creationType
             )
             timeRecordRepository.addRecord(record)
             loadRecords()
@@ -268,6 +275,15 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         // If already started, this resets it to full.
         prefs.edit().putLong(key, System.currentTimeMillis()).apply()
         updateReminderProgress()
+        recordHealthEvent(type)
+    }
+
+    fun recordHealthEvent(type: ReminderType) {
+        val record = HealthRecord(
+            type = type.name,
+            timestamp = System.currentTimeMillis()
+        )
+        healthRecordRepository.addRecord(record)
     }
 
     private fun startReminderLoop() {
@@ -329,6 +345,54 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
              NotificationService.showReminderNotification(getApplication(), type)
              prefs.edit().putLong(lastNotifyKey, now).apply()
         }
+    }
+
+    fun findFreeTimeSlot(targetTime: Long): Pair<Long, Long>? {
+        val records = _records.value.sortedBy { it.startTime }
+        
+        // 1. Check if targetTime is occupied
+        val occupied = records.any { targetTime >= it.startTime && targetTime < it.endTime }
+        if (occupied) return null
+        
+        // 2. Find the gap
+        // We need to define the day boundaries for targetTime.
+        val calendar = java.util.Calendar.getInstance()
+        calendar.timeInMillis = targetTime
+        calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
+        calendar.set(java.util.Calendar.MINUTE, 0)
+        calendar.set(java.util.Calendar.SECOND, 0)
+        calendar.set(java.util.Calendar.MILLISECOND, 0)
+        val dayStart = calendar.timeInMillis
+        
+        calendar.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        val dayEnd = calendar.timeInMillis
+        
+        // Filter records for this day (overlapping with the day)
+        val dayRecords = records.filter { it.endTime > dayStart && it.startTime < dayEnd }
+            .sortedBy { it.startTime }
+        
+        // Find gap
+        var lastEnd = dayStart
+        for (record in dayRecords) {
+            val start = record.startTime.coerceAtLeast(dayStart)
+            val end = record.endTime.coerceAtMost(dayEnd)
+            
+            // If the record starts after the last end, there is a gap [lastEnd, start]
+            if (targetTime < start) {
+                // Check if targetTime falls in this gap
+                if (targetTime >= lastEnd) {
+                    return Pair(lastEnd, start)
+                }
+            }
+            lastEnd = end.coerceAtLeast(lastEnd)
+        }
+        
+        // Check last gap (after last record until dayEnd)
+        if (targetTime >= lastEnd && targetTime < dayEnd) {
+            return Pair(lastEnd, dayEnd)
+        }
+        
+        return null
     }
 
     override fun onCleared() {

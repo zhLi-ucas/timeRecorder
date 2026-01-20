@@ -1,5 +1,10 @@
 package com.example.timemanager.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
@@ -14,10 +19,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.timemanager.data.TimerState
-import com.example.timemanager.ui.components.HourglassDisplay
-import com.example.timemanager.ui.components.ReminderButton
 import com.example.timemanager.ui.components.ReminderType
+import com.example.timemanager.ui.components.StartButton
 import com.example.timemanager.ui.components.TagSelectionDialog
+import com.example.timemanager.ui.components.ThermometerReminder
 import com.example.timemanager.viewmodel.TimerViewModel
 
 @Composable
@@ -60,57 +65,132 @@ fun HomeScreen(
                 modifier = Modifier.padding(top = 24.dp, bottom = 32.dp)
             )
 
-            // Hourglass Control + Reminders
+            // Central Area
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                // Hourglass (Center)
-                HourglassDisplay(
-                    isRunning = timerState == TimerState.RUNNING,
-                    elapsedSeconds = displaySeconds,
-                    onStartClick = { showTagSelection = true },
-                    onFocusClick = onNavigateToTimer,
-                    onEndClick = { actualViewModel.endTask() },
-                    modifier = Modifier.fillMaxHeight(0.9f).fillMaxWidth(0.7f) // Slightly constrained width
-                )
-                
-                // Reminders (Right Side)
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                // Layer 1: Start Button (IDLE State)
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = timerState == TimerState.IDLE,
+                    enter = fadeIn(),
+                    exit = fadeOut()
                 ) {
-                    ReminderButton(
-                        type = ReminderType.WATER,
-                        progress = waterProgress,
-                        onClick = { actualViewModel.resetReminder(ReminderType.WATER) }
+                    StartButton(
+                        onLongPressComplete = { showTagSelection = true }
                     )
-                    
-                    ReminderButton(
-                        type = ReminderType.STAND,
-                        progress = standProgress,
-                        onClick = { actualViewModel.resetReminder(ReminderType.STAND) }
-                    )
+                }
+
+                // Layer 2: Running Controls (RUNNING State)
+                // "Focus" at Top, "End" at Bottom
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = timerState == TimerState.RUNNING,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        // Focus Button (Top)
+                        // Split animation: Starts from center (0 offset) and moves up
+                        StartButton(
+                            onLongPressComplete = onNavigateToTimer, // Click to navigate (Short press logic?) - Re-using StartButton for visual consistency, but maybe just Button is better? 
+                            // Request says: "Circle button smaller than Start button... Split from Start button location"
+                            // "One goes up to become Focus button, one goes down to become End button"
+                            modifier = Modifier
+                                .align(Alignment.Center) // Start at center
+                                .offset(y = (-150).dp) // Move up
+                                .animateEnterExit(
+                                    enter = slideInVertically(
+                                        initialOffsetY = { 150 * 3 } // Start from roughly center (relative to final position)
+                                        // Actually slideInVertically is relative to its own placement. 
+                                        // If placed at -150dp, we want it to start at 0dp (Center). 
+                                        // 0dp is +150dp down from -150dp.
+                                    ) + fadeIn(),
+                                    exit = slideOutVertically(targetOffsetY = { 150 * 3 }) + fadeOut()
+                                ),
+                             text = "专注",
+                             size = 120.dp
+                        )
+
+                        // End Button (Bottom)
+                        StartButton(
+                            onLongPressComplete = { actualViewModel.endTask() },
+                            modifier = Modifier
+                                .align(Alignment.Center) // Start at center
+                                .offset(y = 150.dp) // Move down
+                                .animateEnterExit(
+                                    enter = slideInVertically(initialOffsetY = { -150 * 3 }) + fadeIn(), // Start from center (up)
+                                    exit = slideOutVertically(targetOffsetY = { -150 * 3 }) + fadeOut()
+                                ),
+                            text = "结束",
+                            color = MaterialTheme.colorScheme.error,
+                            size = 120.dp
+                        )
+                    }
+                }
+                
+                // Reminders (Right Side) - Visible when Running
+                // "Health icons: Dynamically generated after start"
+                // Water to Right, Stand to Left
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = timerState == TimerState.RUNNING,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                     Box(modifier = Modifier.fillMaxSize()) {
+                        // Water (Right)
+                        ThermometerReminder(
+                            type = ReminderType.WATER,
+                            progress = waterProgress,
+                            onClick = { actualViewModel.resetReminder(ReminderType.WATER) },
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .padding(end = 24.dp)
+                                .animateEnterExit(
+                                    enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { -it }) + fadeIn(), // From Center (Left) to Right
+                                    exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { -it }) + fadeOut()
+                                )
+                        )
+                        
+                        // Stand (Left)
+                        ThermometerReminder(
+                            type = ReminderType.STAND,
+                            progress = standProgress,
+                            onClick = { actualViewModel.resetReminder(ReminderType.STAND) },
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .padding(start = 24.dp)
+                                .animateEnterExit(
+                                    enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) + fadeIn(), // From Center (Right) to Left
+                                    exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { it }) + fadeOut()
+                                )
+                        )
+                     }
                 }
             }
         }
 
         // Bottom Right Action Buttons
-        Row(
+        // "Entries: Bottom right circular entry for History and Settings"
+        // Fade out when running
+        androidx.compose.animation.AnimatedVisibility(
+            visible = timerState == TimerState.IDLE,
+            enter = fadeIn(),
+            exit = fadeOut(),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(bottom = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(bottom = 16.dp)
         ) {
-            FilledIconButton(onClick = onNavigateToRecords) {
-                Icon(Icons.Default.DateRange, contentDescription = "查看记录")
-            }
-            FilledIconButton(onClick = onNavigateToOptions) {
-                Icon(Icons.Default.Settings, contentDescription = "选项")
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                FilledIconButton(onClick = onNavigateToRecords) {
+                    Icon(Icons.Default.DateRange, contentDescription = "查看记录")
+                }
+                FilledIconButton(onClick = onNavigateToOptions) {
+                    Icon(Icons.Default.Settings, contentDescription = "选项")
+                }
             }
         }
 

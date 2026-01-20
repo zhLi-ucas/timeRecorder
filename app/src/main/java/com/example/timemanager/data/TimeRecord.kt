@@ -8,5 +8,6 @@ data class TimeRecord(
     val startTime: Long,
     val endTime: Long,
     val durationSeconds: Long,
-    val description: String
+    val description: String,
+    val creationType: String = "QUICK"
 )

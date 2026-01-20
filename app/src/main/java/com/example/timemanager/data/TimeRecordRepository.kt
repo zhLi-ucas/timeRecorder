@@ -27,7 +27,8 @@ class TimeRecordRepository(private val context: Context) {
                         startTime = obj.getLong("startTime"),
                         endTime = obj.getLong("endTime"),
                         durationSeconds = obj.getLong("durationSeconds"),
-                        description = obj.getString("description")
+                        description = obj.getString("description"),
+                        creationType = obj.optString("creationType", "QUICK")
                     )
                 )
             }
@@ -72,6 +73,7 @@ class TimeRecordRepository(private val context: Context) {
                 put("endTime", record.endTime)
                 put("durationSeconds", record.durationSeconds)
                 put("description", record.description)
+                put("creationType", record.creationType)
             }
             jsonArray.put(obj)
         }

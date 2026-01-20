@@ -3,43 +3,49 @@ package com.example.timemanager.ui.screens
 import android.app.Application
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.pager.PagerState
-import kotlinx.coroutines.launch
-import java.util.concurrent.TimeUnit
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.timemanager.data.Tag
 import com.example.timemanager.data.TimeRecord
 import com.example.timemanager.viewmodel.TimerViewModel
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
+import java.util.concurrent.TimeUnit
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimeRecordsScreen(
     viewModel: TimerViewModel? = null,
@@ -54,39 +60,29 @@ fun TimeRecordsScreen(
     val records by actualViewModel.records.collectAsState()
     val tags by actualViewModel.tags.collectAsState()
     
-    // State for date navigation using Pager
     val initialPage = Int.MAX_VALUE / 2
     val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { Int.MAX_VALUE })
     val scope = rememberCoroutineScope()
     
-    // Base date for calculating page dates (Today)
     val baseDate = remember { Calendar.getInstance() }
-    
-    // Calculate current date from pager state
     val currentDate = remember(pagerState.currentPage) {
         val date = baseDate.clone() as Calendar
         date.add(Calendar.DAY_OF_YEAR, pagerState.currentPage - initialPage)
         date
     }
     
-    // Helper function to calculate date for any page
     fun getDateForPage(page: Int): Calendar {
         val date = baseDate.clone() as Calendar
         date.add(Calendar.DAY_OF_YEAR, page - initialPage)
         return date
     }
 
-    // Date navigation helper functions
     fun previousDay() {
-        scope.launch {
-            pagerState.animateScrollToPage(pagerState.currentPage - 1)
-        }
+        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
     }
 
     fun nextDay() {
-        scope.launch {
-            pagerState.animateScrollToPage(pagerState.currentPage + 1)
-        }
+        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
     }
 
     fun showDatePicker() {
@@ -95,28 +91,11 @@ fun TimeRecordsScreen(
             { _, year, month, day ->
                 val selectedDate = Calendar.getInstance()
                 selectedDate.set(year, month, day)
-                
-                // Calculate page difference
                 val diffInMillis = selectedDate.timeInMillis - baseDate.timeInMillis
                 val diffDays = TimeUnit.MILLISECONDS.toDays(diffInMillis).toInt()
-                
-                // Adjust for potential timezone/DST issues with simple division
-                // A more robust way:
-                val tempBase = baseDate.clone() as Calendar
-                // We need to find exact day difference. 
-                // Since this is UI logic, we can iterate or use library if needed.
-                // Simple approximation is usually fine if we stick to noon or handle it carefully.
-                // Let's use a loop for small diffs or exact calculation.
-                
-                // Better approach: use java.time if possible, but sticking to Calendar:
-                // We'll trust the simple diff for now, but to be safe, let's recalculate target page date
                 val targetPage = initialPage + diffDays
                 
-                // Verify close pages to handle day boundary issues (e.g. 23h vs 25h days)
                 var bestPage = targetPage
-                var minDiff = Long.MAX_VALUE
-                
-                // Search around the estimated page to find the exact date match
                 for (offset in -1..1) {
                     val p = targetPage + offset
                     val d = getDateForPage(p)
@@ -125,10 +104,7 @@ fun TimeRecordsScreen(
                         break
                     }
                 }
-                
-                scope.launch {
-                    pagerState.scrollToPage(bestPage)
-                }
+                scope.launch { pagerState.scrollToPage(bestPage) }
             },
             currentDate.get(Calendar.YEAR),
             currentDate.get(Calendar.MONTH),
@@ -136,13 +112,14 @@ fun TimeRecordsScreen(
         ).show()
     }
 
-    // Create a map for quick tag color lookup
     val tagColorMap = remember(tags) { 
         tags.associate { it.name to Color(it.colorArgb) } 
     }
 
     var showEditDialog by remember { mutableStateOf(false) }
     var editingRecord by remember { mutableStateOf<TimeRecord?>(null) }
+    var newRecordStart by remember { mutableStateOf(0L) }
+    var newRecordEnd by remember { mutableStateOf(0L) }
 
     Scaffold(
         topBar = {
@@ -157,6 +134,8 @@ fun TimeRecordsScreen(
                     IconButton(
                         onClick = {
                             editingRecord = null
+                            newRecordStart = currentDate.timeInMillis
+                            newRecordEnd = currentDate.timeInMillis + 30 * 60 * 1000
                             showEditDialog = true
                         }
                     ) {
@@ -171,7 +150,6 @@ fun TimeRecordsScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Date Navigation Bar
             val isToday = isSameDay(currentDate, Calendar.getInstance())
             val navBarColor = if (isToday) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.surfaceVariant
 
@@ -217,49 +195,40 @@ fun TimeRecordsScreen(
                 }
             }
 
-            // Records List with Pager Support
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize()
             ) { page ->
                 val pageDate = getDateForPage(page)
-                
-                // Filter records for the page's date
                 val pageRecords = remember(records, page) {
                     records.filter { record ->
                         val recordCal = Calendar.getInstance().apply { timeInMillis = record.startTime }
                         isSameDay(pageDate, recordCal)
-                    }.sortedBy { it.startTime } // Sorted Ascending (Morning to Night)
+                    }.sortedBy { it.startTime }
                 }
 
-                if (pageRecords.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "暂无记录",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        items(pageRecords) { record ->
-                            val tagColor = tagColorMap[record.tag] ?: MaterialTheme.colorScheme.surfaceVariant
-                            TimeRecordItem(
-                                record = record,
-                                tagColor = tagColor,
-                                onClick = {
-                                    editingRecord = record
-                                    showEditDialog = true
-                                }
-                            )
-                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                Box(modifier = Modifier.fillMaxSize()) {
+                    TimelineView(
+                        records = pageRecords,
+                        tagColorMap = tagColorMap,
+                        pageDate = pageDate,
+                        onRecordClick = { record ->
+                            editingRecord = record
+                            showEditDialog = true
+                        },
+                        onEmptySpaceClick = { timeInMillis ->
+                            val freeSlot = actualViewModel.findFreeTimeSlot(timeInMillis)
+                            editingRecord = null
+                            if (freeSlot != null) {
+                                newRecordStart = freeSlot.first
+                                newRecordEnd = freeSlot.second
+                            } else {
+                                newRecordStart = timeInMillis
+                                newRecordEnd = timeInMillis + 30 * 60 * 1000
+                            }
+                            showEditDialog = true
                         }
-                    }
+                    )
                 }
             }
         }
@@ -269,7 +238,8 @@ fun TimeRecordsScreen(
         EditTimeRecordDialog(
             record = editingRecord,
             allTags = tags,
-            initialDate = currentDate.timeInMillis, // Pass current selected date
+            initialStartTime = if (editingRecord != null) editingRecord!!.startTime else newRecordStart,
+            initialEndTime = if (editingRecord != null) editingRecord!!.endTime else newRecordEnd,
             onDismiss = { showEditDialog = false },
             onConfirm = { record ->
                 if (editingRecord == null) {
@@ -288,59 +258,113 @@ fun TimeRecordsScreen(
 }
 
 @Composable
-fun TimeRecordItem(
-    record: TimeRecord,
-    tagColor: Color,
-    onClick: () -> Unit
+fun TimelineView(
+    records: List<TimeRecord>,
+    tagColorMap: Map<String, Color>,
+    pageDate: Calendar,
+    onRecordClick: (TimeRecord) -> Unit,
+    onEmptySpaceClick: (Long) -> Unit
 ) {
-    Column(
+    val scrollState = rememberScrollState()
+    val hourHeight = 60.dp 
+    val totalHeight = hourHeight * 24
+    val textMeasurer = rememberTextMeasurer()
+    val rulerColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+    val dividerColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+
+    Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .background(tagColor.copy(alpha = 0.15f))
-            .clickable(onClick = onClick)
-            .padding(16.dp)
+            .fillMaxSize()
+            .verticalScroll(scrollState)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = record.tag,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = formatDurationDisplay(record.durationSeconds),
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(4.dp))
-        
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            if (record.description.isNotBlank()) {
-                Text(
-                    text = record.description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f)
-                )
-            } else {
-                Spacer(modifier = Modifier.weight(1f))
+        Row(modifier = Modifier.height(totalHeight).fillMaxWidth()) {
+            // Ruler
+            Canvas(modifier = Modifier.width(50.dp).fillMaxHeight()) {
+                val stepHeight = size.height / 24
+                for (i in 0..24) {
+                    val y = i * stepHeight
+                    drawLine(
+                        color = dividerColor,
+                        start = Offset(0f, y),
+                        end = Offset(size.width, y),
+                        strokeWidth = 1.dp.toPx()
+                    )
+                    if (i < 24) {
+                        drawText(
+                            textMeasurer = textMeasurer,
+                            text = String.format("%02d:00", i),
+                            topLeft = Offset(8.dp.toPx(), y + 4.dp.toPx()),
+                            style = TextStyle(fontSize = 12.sp, color = rulerColor)
+                        )
+                    }
+                }
             }
             
-            Text(
-                text = formatTimeRange(record.startTime, record.endTime),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-            )
+            // Content
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .pointerInput(pageDate) {
+                        detectTapGestures { offset ->
+                            val totalHeightPx = size.height
+                            val ratio = offset.y / totalHeightPx
+                            val millisInDay = (ratio * 24 * 60 * 60 * 1000).toLong()
+                            
+                            val clickedTime = pageDate.clone() as Calendar
+                            clickedTime.set(Calendar.HOUR_OF_DAY, 0)
+                            clickedTime.set(Calendar.MINUTE, 0)
+                            clickedTime.set(Calendar.SECOND, 0)
+                            clickedTime.set(Calendar.MILLISECOND, 0)
+                            clickedTime.add(Calendar.MILLISECOND, millisInDay.toInt())
+                            
+                            onEmptySpaceClick(clickedTime.timeInMillis)
+                        }
+                    }
+            ) {
+                 Canvas(modifier = Modifier.fillMaxSize()) {
+                    val stepHeight = size.height / 24
+                    for (i in 0..24) {
+                        val y = i * stepHeight
+                        drawLine(
+                            color = dividerColor,
+                            start = Offset(0f, y),
+                            end = Offset(size.width, y),
+                            strokeWidth = 1.dp.toPx()
+                        )
+                    }
+                 }
+                 
+                 records.forEach { record ->
+                     val cal = Calendar.getInstance().apply { timeInMillis = record.startTime }
+                     val startHour = cal.get(Calendar.HOUR_OF_DAY)
+                     val startMin = cal.get(Calendar.MINUTE)
+                     val durationMins = record.durationSeconds / 60f
+                     
+                     val startOffset = (startHour + startMin / 60f) * hourHeight.value
+                     val height = (durationMins / 60f) * hourHeight.value
+                     
+                     val color = tagColorMap[record.tag] ?: MaterialTheme.colorScheme.primary
+                     
+                     Box(
+                         modifier = Modifier
+                             .padding(start = 2.dp, end = 8.dp)
+                             .offset(y = startOffset.dp)
+                             .height(height.dp.coerceAtLeast(20.dp))
+                             .fillMaxWidth()
+                             .background(color.copy(alpha = 0.8f), shape = MaterialTheme.shapes.small)
+                             .clickable { onRecordClick(record) }
+                             .padding(4.dp)
+                     ) {
+                         Text(
+                             text = "${record.tag} ${if(record.description.isNotEmpty()) "- ${record.description}" else ""}",
+                             style = MaterialTheme.typography.labelSmall,
+                             color = Color.White,
+                             maxLines = 1
+                         )
+                     }
+                 }
+            }
         }
     }
 }
@@ -349,24 +373,18 @@ fun TimeRecordItem(
 fun EditTimeRecordDialog(
     record: TimeRecord?,
     allTags: List<Tag>,
-    initialDate: Long = System.currentTimeMillis(),
+    initialStartTime: Long,
+    initialEndTime: Long,
     onDismiss: () -> Unit,
     onConfirm: (TimeRecord) -> Unit,
     onDelete: (TimeRecord) -> Unit
 ) {
-    // Initial State Initialization
     val context = LocalContext.current
     val calendar = Calendar.getInstance()
     
-    // Initialize with record data or current time
-    val initStartTime = record?.startTime ?: initialDate
-    val initEndTime = record?.endTime ?: initialDate
+    val startCal = Calendar.getInstance().apply { timeInMillis = initialStartTime }
+    val endCal = Calendar.getInstance().apply { timeInMillis = initialEndTime }
     
-    // Parse initial values
-    val startCal = Calendar.getInstance().apply { timeInMillis = initStartTime }
-    val endCal = Calendar.getInstance().apply { timeInMillis = initEndTime }
-    
-    // State variables
     var selectedDate by remember { mutableStateOf(startCal.timeInMillis) }
     var isNextDay by remember { 
         mutableStateOf(
@@ -384,7 +402,6 @@ fun EditTimeRecordDialog(
     var selectedTag by remember { mutableStateOf(record?.tag ?: if (allTags.isNotEmpty()) allTags[0].name else "Default") }
     var description by remember { mutableStateOf(record?.description ?: "") }
 
-    // Helper functions for Dialogs
     fun showDatePicker() {
         calendar.timeInMillis = selectedDate
         DatePickerDialog(
@@ -420,7 +437,6 @@ fun EditTimeRecordDialog(
         ).show()
     }
 
-    // Calculate final timestamps
     val finalStartTime = remember(selectedDate, startHour, startMinute) {
         Calendar.getInstance().apply {
             timeInMillis = selectedDate
@@ -455,7 +471,6 @@ fun EditTimeRecordDialog(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Tag Selection
                 Text("标签", style = MaterialTheme.typography.labelLarge)
                 LazyHorizontalGrid(
                     rows = GridCells.Fixed(2),
@@ -470,14 +485,8 @@ fun EditTimeRecordDialog(
                             label = { Text(tag.name) }
                         )
                     }
-                    if (allTags.isEmpty()) {
-                        item {
-                            Text("无可用标签，请在设置中添加", style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
                 }
 
-                // Date Selection
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -499,7 +508,6 @@ fun EditTimeRecordDialog(
                     }
                 }
 
-                // Time Selection
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -518,20 +526,15 @@ fun EditTimeRecordDialog(
                                 color = if (isValid) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                             )
                         }
-                        if (!isValid) {
-                            Text("结束时间不能早于开始时间", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
-                        }
                     }
                 }
 
-                // Duration Display
                 Text(
                     text = "持续时间: ${formatDuration(durationSeconds)}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.secondary
                 )
 
-                // Description
                 OutlinedTextField(
                     value = description,
                     onValueChange = { if (it.length <= 50) description = it },
@@ -583,7 +586,6 @@ fun EditTimeRecordDialog(
 
 private fun formatDateHeader(date: Calendar): String {
     val today = Calendar.getInstance()
-    
     return when {
         isSameDay(today, date) -> "今天"
         isYesterday(today, date) -> "昨天"
@@ -606,19 +608,4 @@ private fun formatDuration(seconds: Long): String {
     val h = seconds / 3600
     val m = (seconds % 3600) / 60
     return String.format("%02d:%02d", h, m)
-}
-
-private fun formatDurationDisplay(seconds: Long): String {
-    val h = seconds / 3600
-    val m = (seconds % 3600) / 60
-    return if (h > 0) {
-        "$h h $m min"
-    } else {
-        "$m min"
-    }
-}
-
-private fun formatTimeRange(start: Long, end: Long): String {
-    val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
-    return "${sdf.format(Date(start))} - ${sdf.format(Date(end))}"
 }
