@@ -81,126 +81,98 @@ fun HomeScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp)
     ) {
+        // --- Layer 1: Full Screen Tag Pager (Only active in IDLE state) ---
+        androidx.compose.animation.AnimatedVisibility(
+            visible = timerState == TimerState.IDLE,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 0.dp) // Full width swipe
+            ) { page ->
+                val isOther = page == displayTags.size
+                val tag = if (isOther) null else displayTags[page]
+
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    // Tag Display at the bottom
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.8f) // Wider display
+                            // 控制Tag位置：修改 bottom 的 padding 值 (例如 100.dp)
+                            .padding(bottom = 200.dp)
+                            .height(80.dp)
+                            .clip(MaterialTheme.shapes.extraLarge)
+                            .background(
+                                if (isOther) MaterialTheme.colorScheme.surfaceVariant 
+                                else Color(tag?.colorArgb ?: 0).copy(alpha = 0.15f)
+                            )
+                            .clickable {
+                                if (isOther) showOtherTagsMenu = true
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.padding(horizontal = 24.dp)
+                        ) {
+                            Text(
+                                text = tag?.name ?: "其他",
+                                style = MaterialTheme.typography.headlineSmall.copy(
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 2.sp
+                                ),
+                                color = if (isOther) MaterialTheme.colorScheme.onSurfaceVariant 
+                                        else Color(tag?.colorArgb ?: 0)
+                            )
+                            if (isOther) {
+                                Icon(
+                                    Icons.Default.ArrowDropDown, 
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- Layer 2: Fixed Content ---
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Header
+            // Header (Lowered to where the old tag selector was)
             Text(
                 text = "TimeManager",
                 style = MaterialTheme.typography.displaySmall.copy(
                     fontWeight = FontWeight.Bold
                 ),
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(top = 24.dp, bottom = 16.dp)
+                // 控制标题位置：修改 top 的 padding 值 (例如 100.dp)
+                modifier = Modifier.padding(top = 100.dp)
             )
-
-            // Tag Selector
-            androidx.compose.animation.AnimatedVisibility(
-                visible = timerState == TimerState.IDLE,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    HorizontalPager(
-                        state = pagerState,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(60.dp),
-                        contentPadding = PaddingValues(horizontal = 120.dp)
-                    ) { page ->
-                        val isOther = page == displayTags.size
-                        val tag = if (isOther) null else displayTags[page]
-                        
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(4.dp)
-                                .clip(MaterialTheme.shapes.medium)
-                                .background(
-                                    if (isOther) MaterialTheme.colorScheme.surfaceVariant 
-                                    else Color(tag?.colorArgb ?: 0).copy(alpha = 0.15f)
-                                )
-                                .clickable {
-                                    if (isOther) showOtherTagsMenu = true
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center,
-                                modifier = Modifier.padding(horizontal = 12.dp)
-                            ) {
-                                Text(
-                                    text = tag?.name ?: "其他",
-                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                                    color = if (isOther) MaterialTheme.colorScheme.onSurfaceVariant 
-                                            else Color(tag?.colorArgb ?: 0)
-                                )
-                                if (isOther) {
-                                    Icon(
-                                        Icons.Default.ArrowDropDown, 
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Other Tags Dropdown/Menu
-                    DropdownMenu(
-                        expanded = showOtherTagsMenu,
-                        onDismissRequest = { showOtherTagsMenu = false }
-                    ) {
-                        otherTags.forEach { tag ->
-                            DropdownMenuItem(
-                                text = { Text(tag.name) },
-                                onClick = {
-                                    actualViewModel.selectTag(tag)
-                                    showOtherTagsMenu = false
-                                },
-                                leadingIcon = {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(12.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(tag.colorArgb))
-                                    )
-                                }
-                            )
-                        }
-                        if (otherTags.isEmpty()) {
-                            DropdownMenuItem(
-                                text = { Text("没有更多标签") },
-                                onClick = { showOtherTagsMenu = false },
-                                enabled = false
-                            )
-                        }
-                    }
-                    
-                    // Selected Tag Indicator (if from "Other")
-                    if (pagerState.currentPage == displayTags.size && currentSelectedTag != null && displayTags.none { it.name == currentSelectedTag?.name }) {
-                        Text(
-                            text = "已选: ${currentSelectedTag?.name}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
-                }
-            }
 
             // Central Area
             Box(
                 modifier = Modifier
                     .weight(1f)
+                    .offset(y = (-100).dp) // Lowered by 100dp
                     .fillMaxWidth(),
+                // 控制开始按钮位置：这里使用了 Center 居中对齐
                 contentAlignment = Alignment.Center
             ) {
-                // Layer 1: Start Button (IDLE State)
+                // IDLE State Button
                 androidx.compose.animation.AnimatedVisibility(
                     visible = timerState == TimerState.IDLE,
                     enter = fadeIn(),
@@ -211,12 +183,11 @@ fun HomeScreen(
                             actualViewModel.startTask(creationType = "PRESET") 
                         },
                         text = "开始",
-                        size = 200.dp
+                        size = 220.dp // Slightly larger
                     )
                 }
 
-                // Layer 2: Running Controls (RUNNING State)
-                // "Focus" at Top, "End" at Bottom
+                // RUNNING State Controls
                 androidx.compose.animation.AnimatedVisibility(
                     visible = timerState == TimerState.RUNNING,
                     enter = fadeIn(),
@@ -224,21 +195,13 @@ fun HomeScreen(
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         // Focus Button (Top)
-                        // Split animation: Starts from center (0 offset) and moves up
                         StartButton(
-                            onLongPressComplete = onNavigateToTimer, // Click to navigate (Short press logic?) - Re-using StartButton for visual consistency, but maybe just Button is better? 
-                            // Request says: "Circle button smaller than Start button... Split from Start button location"
-                            // "One goes up to become Focus button, one goes down to become End button"
+                            onLongPressComplete = onNavigateToTimer,
                             modifier = Modifier
-                                .align(Alignment.Center) // Start at center
-                                .offset(y = (-150).dp) // Move up
+                                .align(Alignment.Center)
+                                .offset(y = (-150).dp)
                                 .animateEnterExit(
-                                    enter = slideInVertically(
-                                        initialOffsetY = { 150 * 3 } // Start from roughly center (relative to final position)
-                                        // Actually slideInVertically is relative to its own placement. 
-                                        // If placed at -150dp, we want it to start at 0dp (Center). 
-                                        // 0dp is +150dp down from -150dp.
-                                    ) + fadeIn(),
+                                    enter = slideInVertically(initialOffsetY = { 150 * 3 }) + fadeIn(),
                                     exit = slideOutVertically(targetOffsetY = { 150 * 3 }) + fadeOut()
                                 ),
                              text = "专注",
@@ -249,10 +212,10 @@ fun HomeScreen(
                         StartButton(
                             onLongPressComplete = { actualViewModel.endTask() },
                             modifier = Modifier
-                                .align(Alignment.Center) // Start at center
-                                .offset(y = 150.dp) // Move down
+                                .align(Alignment.Center)
+                                .offset(y = 150.dp)
                                 .animateEnterExit(
-                                    enter = slideInVertically(initialOffsetY = { -150 * 3 }) + fadeIn(), // Start from center (up)
+                                    enter = slideInVertically(initialOffsetY = { -150 * 3 }) + fadeIn(),
                                     exit = slideOutVertically(targetOffsetY = { -150 * 3 }) + fadeOut()
                                 ),
                             text = "结束",
@@ -262,16 +225,13 @@ fun HomeScreen(
                     }
                 }
                 
-                // Reminders (Right Side) - Visible when Running
-                // "Health icons: Dynamically generated after start"
-                // Water to Right, Stand to Left
+                // Reminders
                 androidx.compose.animation.AnimatedVisibility(
                     visible = timerState == TimerState.RUNNING,
                     enter = fadeIn(),
                     exit = fadeOut()
                 ) {
                      Box(modifier = Modifier.fillMaxSize()) {
-                        // Water (Right)
                         ThermometerReminder(
                             type = ReminderType.WATER,
                             progress = waterProgress,
@@ -280,12 +240,11 @@ fun HomeScreen(
                                 .align(Alignment.CenterEnd)
                                 .padding(end = 24.dp)
                                 .animateEnterExit(
-                                    enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { -it }) + fadeIn(), // From Center (Left) to Right
+                                    enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { -it }) + fadeIn(),
                                     exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { -it }) + fadeOut()
                                 )
                         )
                         
-                        // Stand (Left)
                         ThermometerReminder(
                             type = ReminderType.STAND,
                             progress = standProgress,
@@ -294,11 +253,40 @@ fun HomeScreen(
                                 .align(Alignment.CenterStart)
                                 .padding(start = 24.dp)
                                 .animateEnterExit(
-                                    enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) + fadeIn(), // From Center (Right) to Left
+                                    enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
                                     exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { it }) + fadeOut()
                                 )
                         )
                      }
+                }
+            }
+        }
+
+        // --- Layer 3: Dropdown & Overlays ---
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            DropdownMenu(
+                expanded = showOtherTagsMenu,
+                onDismissRequest = { showOtherTagsMenu = false }
+            ) {
+                otherTags.forEach { tag ->
+                    DropdownMenuItem(
+                        text = { Text(tag.name) },
+                        onClick = {
+                            actualViewModel.selectTag(tag)
+                            showOtherTagsMenu = false
+                        },
+                        leadingIcon = {
+                            Box(
+                                modifier = Modifier
+                                    .size(12.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(tag.colorArgb))
+                            )
+                        }
+                    )
                 }
             }
         }

@@ -6,46 +6,28 @@ TimeManager 是一款 Android 时间管理应用，基于 Jetpack Compose 开发
 ## 重大版本重构与实施规划 (Major Refactoring & Implementation Plan)
 
 ### 前端修改要求 (Frontend Requirements)
-1. **设置页 - 标签管理增强 (Settings - Enhanced Tag Management)**
-   - [x] 修改 `OptionsScreen` 中的标签列表项。
-   - [x] 为每个标签添加“首页展示 (Show on Home)”的勾选框/开关。
-   - [x] 确保 UI 能正确反映标签的 `showOnHome` 状态。
-
-2. **主页 - 标签滑动选择器 (Home - Tag Swipe Selector)**
-   - [x] 在 `HomeScreen` 引入 `HorizontalPager` (Jetpack Compose)。
-   - [x] 数据源：所有 `showOnHome=true` 的标签 + 一个固定的“其他 (Other)”选项。
-   - [x] 交互：左右滑动切换当前选中的预设任务（Tag）。
-   - [x] “其他”选项逻辑：当滑动到“其他”时，提供二级选择（如点击弹出下拉框或对话框）来选择剩余的标签。
-
-3. **主页 - 新版开始/结束流程 (Home - New Start/Stop Flow)**
-   - [x] **开始 (Start)**: 修改 `StartButton` 交互。长按 (Long Press) -> 直接以当前 Pager 选中的 Tag 开始计时，无需弹出编辑框。
-   - [x] **结束 (Stop)**: 点击停止 -> 停止计时 -> 立即弹出“记录编辑弹窗 (Record Edit Dialog)”。
-
-4. **记录编辑弹窗 (Record Edit Dialog)**
-   - [x] 创建一个新的 Dialog 组件，用于结束计时后显示。
-   - [x] 显示内容：预设的 Tag（不可变）、开始/结束时间（只读）。
-   - [x] 输入内容：描述 (Description)。
-   - [x] 操作：保存 (Save) 或 丢弃 (Discard)。
+1. 暂无
+   - [ ] step1
+   - [ ] step2
+   - [ ] step3
+   - [ ] ...
 
 ### 后端修改要求 (Backend Requirements)
 *(注：此处后端指代应用内部数据层与逻辑层，或将来扩展的服务端)*
 
-1. **数据模型升级 (Data Model Update)**
-   - [x] 修改 `Tag` 数据类，增加字段 `val showOnHome: Boolean`。
-   - [x] 更新 `TagRepository`：
-     - [x] 处理新字段的 JSON 读写。
-     - [x] 初始化逻辑：默认将 "Working" 和 "Sleeping" 设为 `showOnHome=true`，其余默认为 `false`。
-
-2. **ViewModel 逻辑重构 (ViewModel Refactoring)**
-   - [x] 在 `TimerViewModel` 中区分 `displayTags` (用于 Pager) 和 `otherTags` (用于二级菜单)。
-   - [x] 维护 `currentSelectedTag` 状态，随 Pager 滑动或“其他”选项的选择而更新。
-   - [x] 重构 `startTimer` 逻辑：支持直接传入 Tag 或使用当前选中的 Tag 启动。
-   - [x] 重构 `stopTimer` 逻辑：停止后触发 UI 事件以显示编辑弹窗。
+1. 暂无
+   - [ ] step1
+   - [ ] step2
+   - [ ] step3
+   - [ ] ...
 
 ## 当前功能 (Current Features)
 
 *   **时间追踪 (Time Tracking)**:
-    *   通过简单的“开始”和“停止”操作记录任务时长。
+    *   **快速启动**: 长按开始按钮直接以当前选中的标签开始计时。
+    *   **滑动选择**: 主页支持左右滑动切换常用的“展示标签 (Show Tags)”。
+    *   **二级选择**: 提供“其他”选项，支持从完整列表中选择标签。
+    *   **完成确认**: 停止计时后自动弹出对话框，用于补充任务描述。
     *   支持后台运行（基于时间戳计算，无需常驻后台服务）。
 *   **健康提醒 (Health Reminders)**:
     *   内置“喝水”与“久坐”提醒。
@@ -57,6 +39,7 @@ TimeManager 是一款 Android 时间管理应用，基于 Jetpack Compose 开发
     *   本地 JSON 持久化存储。
 *   **标签系统 (Tag System)**:
     *   自定义任务标签（Working, Learning, Playing 等）。
+    *   **首页展示管理**: 在设置中可配置哪些标签显示在主页滑动列表中。
     *   支持标签颜色管理。
 *   **专注模式 (Ambient Mode)**:
     *   提供纯净的横屏时钟显示 (`AmbientDisplayActivity`)。
@@ -72,21 +55,23 @@ TimeManager 是一款 Android 时间管理应用，基于 Jetpack Compose 开发
     *   [`AmbientDisplayActivity.kt`](app/src/main/java/com/example/timemanager/ui/activities/AmbientDisplayActivity.kt): 独立的专注模式 Activity。
 
 *   **Screens (`ui/screens/`)**
-    *   [`HomeScreen.kt`](app/src/main/java/com/example/timemanager/ui/screens/HomeScreen.kt): 主页，集成计时控制与提醒。
+    *   [`HomeScreen.kt`](app/src/main/java/com/example/timemanager/ui/screens/HomeScreen.kt): 主页，集成 `HorizontalPager` 实现标签滑动选择，包含计时控制与提醒。
     *   [`TimeRecordsScreen.kt`](app/src/main/java/com/example/timemanager/ui/screens/TimeRecordsScreen.kt): 历史记录列表。
-    *   [`OptionsScreen.kt`](app/src/main/java/com/example/timemanager/ui/screens/OptionsScreen.kt): 设置与标签管理。
+    *   [`OptionsScreen.kt`](app/src/main/java/com/example/timemanager/ui/screens/OptionsScreen.kt): 设置页，包含标签管理（新增首页展示开关）。
     *   [`AmbientDisplayScreen.kt`](app/src/main/java/com/example/timemanager/ui/screens/AmbientDisplayScreen.kt): 专注模式 UI 实现。
 
 *   **Components (`ui/components/`)**
-    *   [`StartButton.kt`](app/src/main/java/com/example/timemanager/ui/components/StartButton.kt): 计时控制按钮。
+    *   [`StartButton.kt`](app/src/main/java/com/example/timemanager/ui/components/StartButton.kt): 计时控制按钮，支持长按启动。
+    *   [`FinishTaskDialog.kt`](app/src/main/java/com/example/timemanager/ui/components/FinishTaskDialog.kt): 任务结束时的编辑对话框。
     *   [`ThermometerReminder.kt`](app/src/main/java/com/example/timemanager/ui/components/ThermometerReminder.kt): 垂直温度计样式的提醒进度条。
     *   [`ReminderButton.kt`](app/src/main/java/com/example/timemanager/ui/components/ReminderButton.kt): 圆形提醒按钮。
-    *   [`TagSelectionDialog.kt`](app/src/main/java/com/example/timemanager/ui/components/TagSelectionDialog.kt): 标签选择对话框。
+    *   [`TagSelectionDialog.kt`](app/src/main/java/com/example/timemanager/ui/components/TagSelectionDialog.kt): 通用标签选择对话框。
 
 ### 2. 逻辑层 (`viewmodel/`)
 
 *   [`TimerViewModel.kt`](app/src/main/java/com/example/timemanager/viewmodel/TimerViewModel.kt):
     *   **核心状态管理**: 统一管理计时状态、提醒倒计时、当前标签。
+    *   **标签分类**: 区分 `displayTags` (首页展示) 和 `otherTags`。
     *   **生命周期感知**: 处理应用前后台切换时的时间差计算。
 
 ### 3. 数据层 (`data/`)
@@ -94,10 +79,11 @@ TimeManager 是一款 Android 时间管理应用，基于 Jetpack Compose 开发
 *   **Repositories**:
     *   [`TimeRecordRepository.kt`](app/src/main/java/com/example/timemanager/data/TimeRecordRepository.kt): 管理时间记录，使用 `time_records.json` 进行本地存储。
     *   [`HealthRecordRepository.kt`](app/src/main/java/com/example/timemanager/data/HealthRecordRepository.kt): 管理健康/提醒打卡记录，使用 `health_records.json` 存储。
-    *   [`TagRepository.kt`](app/src/main/java/com/example/timemanager/data/TagRepository.kt): 管理标签数据，使用 `SharedPreferences` 存储。
+    *   [`TagRepository.kt`](app/src/main/java/com/example/timemanager/data/TagRepository.kt): 管理标签数据，支持 `showOnHome` 字段持久化。
 
 *   **Models**:
-    *   `Task`, `TimeRecord`, `HealthRecord`, `Tag`, `TimerState`.
+    *   `Tag`: 包含 `name`, `color`, `showOnHome`。
+    *   `Task`, `TimeRecord`, `HealthRecord`, `TimerState`.
 
 ### 4. 服务 (`service/`)
 
