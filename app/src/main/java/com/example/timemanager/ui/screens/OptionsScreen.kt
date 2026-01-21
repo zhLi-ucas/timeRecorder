@@ -14,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -87,7 +88,10 @@ fun OptionsScreen(
                 TagItem(
                     tag = tag,
                     onDelete = { actualViewModel.deleteTag(tag) },
-                    onColorChange = { showColorPicker = tag }
+                    onColorChange = { showColorPicker = tag },
+                    onShowOnHomeChange = { isChecked ->
+                        actualViewModel.updateTag(tag.copy(showOnHome = isChecked))
+                    }
                 )
             }
             
@@ -214,7 +218,8 @@ fun OptionsScreen(
 fun TagItem(
     tag: Tag,
     onDelete: () -> Unit,
-    onColorChange: () -> Unit
+    onColorChange: () -> Unit,
+    onShowOnHomeChange: (Boolean) -> Unit
 ) {
     Card(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
@@ -227,7 +232,10 @@ fun TagItem(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
                 // Color Indicator
                 Box(
                     modifier = Modifier
@@ -239,15 +247,31 @@ fun TagItem(
                 Text(
                     text = tag.name,
                     style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f)
                 )
             }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "删除标签",
-                    tint = MaterialTheme.colorScheme.error
+            
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "首页展示",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
                 )
+                Spacer(modifier = Modifier.width(4.dp))
+                Switch(
+                    checked = tag.showOnHome,
+                    onCheckedChange = onShowOnHomeChange,
+                    modifier = Modifier.scale(0.7f)
+                )
+                
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "删除标签",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
     }

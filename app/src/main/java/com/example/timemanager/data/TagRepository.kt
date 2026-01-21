@@ -19,7 +19,13 @@ class TagRepository(context: Context) {
                 val tags = mutableListOf<Tag>()
                 for (i in 0 until jsonArray.length()) {
                     val obj = jsonArray.getJSONObject(i)
-                    tags.add(Tag(obj.getString("name"), obj.getInt("color")))
+                    tags.add(
+                        Tag(
+                            obj.getString("name"),
+                            obj.getInt("color"),
+                            obj.optBoolean("showOnHome", false) // Default to false if missing
+                        )
+                    )
                 }
                 tags
             } catch (e: Exception) {
@@ -61,6 +67,7 @@ class TagRepository(context: Context) {
             val obj = JSONObject()
             obj.put("name", tag.name)
             obj.put("color", tag.colorArgb)
+            obj.put("showOnHome", tag.showOnHome)
             jsonArray.put(obj)
         }
         sharedPreferences.edit().putString(PREFS_KEY_TAGS, jsonArray.toString()).apply()
@@ -68,9 +75,11 @@ class TagRepository(context: Context) {
 
     private fun getDefaultTags(): List<Tag> {
         return listOf(
-            Tag.create("Working"),
+            Tag.create("Working", showOnHome = true),
             Tag.create("Learning"),
-            Tag.create("Playing")
+            Tag.create("Playing"),
+            Tag.create("Sleeping", showOnHome = true),
+            Tag.create("Exercise")
         )
     }
 }

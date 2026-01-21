@@ -5,11 +5,12 @@ import kotlin.random.Random
 
 data class Tag(
     val name: String,
-    val colorArgb: Int
+    val colorArgb: Int,
+    val showOnHome: Boolean = false
 ) {
     companion object {
-        fun create(name: String): Tag {
-            return Tag(name, randomColorArgb())
+        fun create(name: String, showOnHome: Boolean = false): Tag {
+            return Tag(name, randomColorArgb(), showOnHome)
         }
 
         private fun randomColorArgb(): Int {

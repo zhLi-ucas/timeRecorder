@@ -7,40 +7,40 @@ TimeManager 是一款 Android 时间管理应用，基于 Jetpack Compose 开发
 
 ### 前端修改要求 (Frontend Requirements)
 1. **设置页 - 标签管理增强 (Settings - Enhanced Tag Management)**
-   - [ ] 修改 `OptionsScreen` 中的标签列表项。
-   - [ ] 为每个标签添加“首页展示 (Show on Home)”的勾选框/开关。
-   - [ ] 确保 UI 能正确反映标签的 `showOnHome` 状态。
+   - [x] 修改 `OptionsScreen` 中的标签列表项。
+   - [x] 为每个标签添加“首页展示 (Show on Home)”的勾选框/开关。
+   - [x] 确保 UI 能正确反映标签的 `showOnHome` 状态。
 
 2. **主页 - 标签滑动选择器 (Home - Tag Swipe Selector)**
-   - [ ] 在 `HomeScreen` 引入 `HorizontalPager` (Jetpack Compose)。
-   - [ ] 数据源：所有 `showOnHome=true` 的标签 + 一个固定的“其他 (Other)”选项。
-   - [ ] 交互：左右滑动切换当前选中的预设任务（Tag）。
-   - [ ] “其他”选项逻辑：当滑动到“其他”时，提供二级选择（如点击弹出下拉框或对话框）来选择剩余的标签。
+   - [x] 在 `HomeScreen` 引入 `HorizontalPager` (Jetpack Compose)。
+   - [x] 数据源：所有 `showOnHome=true` 的标签 + 一个固定的“其他 (Other)”选项。
+   - [x] 交互：左右滑动切换当前选中的预设任务（Tag）。
+   - [x] “其他”选项逻辑：当滑动到“其他”时，提供二级选择（如点击弹出下拉框或对话框）来选择剩余的标签。
 
 3. **主页 - 新版开始/结束流程 (Home - New Start/Stop Flow)**
-   - [ ] **开始 (Start)**: 修改 `StartButton` 交互。长按 (Long Press) -> 直接以当前 Pager 选中的 Tag 开始计时，无需弹出编辑框。
-   - [ ] **结束 (Stop)**: 点击停止 -> 停止计时 -> 立即弹出“记录编辑弹窗 (Record Edit Dialog)”。
+   - [x] **开始 (Start)**: 修改 `StartButton` 交互。长按 (Long Press) -> 直接以当前 Pager 选中的 Tag 开始计时，无需弹出编辑框。
+   - [x] **结束 (Stop)**: 点击停止 -> 停止计时 -> 立即弹出“记录编辑弹窗 (Record Edit Dialog)”。
 
 4. **记录编辑弹窗 (Record Edit Dialog)**
-   - [ ] 创建一个新的 Dialog 组件，用于结束计时后显示。
-   - [ ] 显示内容：预设的 Tag（不可变）、开始/结束时间（只读）。
-   - [ ] 输入内容：描述 (Description)。
-   - [ ] 操作：保存 (Save) 或 丢弃 (Discard)。
+   - [x] 创建一个新的 Dialog 组件，用于结束计时后显示。
+   - [x] 显示内容：预设的 Tag（不可变）、开始/结束时间（只读）。
+   - [x] 输入内容：描述 (Description)。
+   - [x] 操作：保存 (Save) 或 丢弃 (Discard)。
 
 ### 后端修改要求 (Backend Requirements)
 *(注：此处后端指代应用内部数据层与逻辑层，或将来扩展的服务端)*
 
 1. **数据模型升级 (Data Model Update)**
-   - [ ] 修改 `Tag` 数据类，增加字段 `val showOnHome: Boolean`。
-   - [ ] 更新 `TagRepository`：
-     - [ ] 处理新字段的 JSON 读写。
-     - [ ] 初始化逻辑：默认将 "Working" 和 "Sleeping" 设为 `showOnHome=true`，其余默认为 `false`。
+   - [x] 修改 `Tag` 数据类，增加字段 `val showOnHome: Boolean`。
+   - [x] 更新 `TagRepository`：
+     - [x] 处理新字段的 JSON 读写。
+     - [x] 初始化逻辑：默认将 "Working" 和 "Sleeping" 设为 `showOnHome=true`，其余默认为 `false`。
 
 2. **ViewModel 逻辑重构 (ViewModel Refactoring)**
-   - [ ] 在 `TimerViewModel` 中区分 `displayTags` (用于 Pager) 和 `otherTags` (用于二级菜单)。
-   - [ ] 维护 `currentSelectedTag` 状态，随 Pager 滑动或“其他”选项的选择而更新。
-   - [ ] 重构 `startTimer` 逻辑：支持直接传入 Tag 或使用当前选中的 Tag 启动。
-   - [ ] 重构 `stopTimer` 逻辑：停止后触发 UI 事件以显示编辑弹窗。
+   - [x] 在 `TimerViewModel` 中区分 `displayTags` (用于 Pager) 和 `otherTags` (用于二级菜单)。
+   - [x] 维护 `currentSelectedTag` 状态，随 Pager 滑动或“其他”选项的选择而更新。
+   - [x] 重构 `startTimer` 逻辑：支持直接传入 Tag 或使用当前选中的 Tag 启动。
+   - [x] 重构 `stopTimer` 逻辑：停止后触发 UI 事件以显示编辑弹窗。
 
 ## 当前功能 (Current Features)
 

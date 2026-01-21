@@ -5,25 +5,34 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.timemanager.data.TimeRecord
 import com.example.timemanager.data.TimerState
-import com.example.timemanager.ui.components.ReminderType
-import com.example.timemanager.ui.components.StartButton
-import com.example.timemanager.ui.components.TagSelectionDialog
-import com.example.timemanager.ui.components.ThermometerReminder
+import com.example.timemanager.ui.components.*
 import com.example.timemanager.viewmodel.TimerViewModel
+import com.example.timemanager.viewmodel.UiEvent
+import kotlinx.coroutines.flow.collectLatest
 
 @Composable
 fun HomeScreen(
@@ -40,11 +49,34 @@ fun HomeScreen(
 
     val timerState by actualViewModel.timerState.collectAsState()
     val displaySeconds by actualViewModel.displaySeconds.collectAsState()
-    val tags by actualViewModel.tags.collectAsState()
+    val displayTags by actualViewModel.displayTags.collectAsState()
+    val otherTags by actualViewModel.otherTags.collectAsState()
+    val currentSelectedTag by actualViewModel.currentSelectedTag.collectAsState()
     val waterProgress by actualViewModel.waterProgress.collectAsState()
     val standProgress by actualViewModel.standProgress.collectAsState()
     
+    val pagerState = rememberPagerState(pageCount = { displayTags.size + 1 })
+    var showOtherTagsMenu by remember { mutableStateOf(false) }
+    var showSaveDialog by remember { mutableStateOf<TimeRecord?>(null) }
     var showTagSelection by remember { mutableStateOf(false) }
+
+    // Sync pager with currentSelectedTag
+    LaunchedEffect(displayTags, pagerState.currentPage) {
+        if (pagerState.currentPage < displayTags.size) {
+            actualViewModel.selectTag(displayTags[pagerState.currentPage])
+        }
+    }
+
+    // Handle UI Events
+    LaunchedEffect(Unit) {
+        actualViewModel.uiEvent.collectLatest { event ->
+            when (event) {
+                is UiEvent.ShowSaveRecordDialog -> {
+                    showSaveDialog = event.record
+                }
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -62,8 +94,104 @@ fun HomeScreen(
                     fontWeight = FontWeight.Bold
                 ),
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(top = 24.dp, bottom = 32.dp)
+                modifier = Modifier.padding(top = 24.dp, bottom = 16.dp)
             )
+
+            // Tag Selector
+            androidx.compose.animation.AnimatedVisibility(
+                visible = timerState == TimerState.IDLE,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(60.dp),
+                        contentPadding = PaddingValues(horizontal = 120.dp)
+                    ) { page ->
+                        val isOther = page == displayTags.size
+                        val tag = if (isOther) null else displayTags[page]
+                        
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(4.dp)
+                                .clip(MaterialTheme.shapes.medium)
+                                .background(
+                                    if (isOther) MaterialTheme.colorScheme.surfaceVariant 
+                                    else Color(tag?.colorArgb ?: 0).copy(alpha = 0.15f)
+                                )
+                                .clickable {
+                                    if (isOther) showOtherTagsMenu = true
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.padding(horizontal = 12.dp)
+                            ) {
+                                Text(
+                                    text = tag?.name ?: "其他",
+                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                                    color = if (isOther) MaterialTheme.colorScheme.onSurfaceVariant 
+                                            else Color(tag?.colorArgb ?: 0)
+                                )
+                                if (isOther) {
+                                    Icon(
+                                        Icons.Default.ArrowDropDown, 
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Other Tags Dropdown/Menu
+                    DropdownMenu(
+                        expanded = showOtherTagsMenu,
+                        onDismissRequest = { showOtherTagsMenu = false }
+                    ) {
+                        otherTags.forEach { tag ->
+                            DropdownMenuItem(
+                                text = { Text(tag.name) },
+                                onClick = {
+                                    actualViewModel.selectTag(tag)
+                                    showOtherTagsMenu = false
+                                },
+                                leadingIcon = {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(12.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(tag.colorArgb))
+                                    )
+                                }
+                            )
+                        }
+                        if (otherTags.isEmpty()) {
+                            DropdownMenuItem(
+                                text = { Text("没有更多标签") },
+                                onClick = { showOtherTagsMenu = false },
+                                enabled = false
+                            )
+                        }
+                    }
+                    
+                    // Selected Tag Indicator (if from "Other")
+                    if (pagerState.currentPage == displayTags.size && currentSelectedTag != null && displayTags.none { it.name == currentSelectedTag?.name }) {
+                        Text(
+                            text = "已选: ${currentSelectedTag?.name}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
+            }
 
             // Central Area
             Box(
@@ -79,7 +207,11 @@ fun HomeScreen(
                     exit = fadeOut()
                 ) {
                     StartButton(
-                        onLongPressComplete = { showTagSelection = true }
+                        onLongPressComplete = { 
+                            actualViewModel.startTask(creationType = "PRESET") 
+                        },
+                        text = "开始",
+                        size = 200.dp
                     )
                 }
 
@@ -197,7 +329,7 @@ fun HomeScreen(
         // Tag Selection Dialog
         if (showTagSelection) {
             TagSelectionDialog(
-                tags = tags,
+                tags = displayTags + otherTags, // Combine all tags
                 onDismiss = { showTagSelection = false },
                 onConfirm = { tag, description ->
                     actualViewModel.startTask(tag, description)
@@ -205,6 +337,21 @@ fun HomeScreen(
                 },
                 onAddTag = { name -> actualViewModel.addTag(name) },
                 onDeleteTag = { tag -> actualViewModel.deleteTag(tag) }
+            )
+        }
+
+        // Finish Task / Save Record Dialog
+        showSaveDialog?.let { record ->
+            FinishTaskDialog(
+                record = record,
+                onDismiss = { showSaveDialog = null },
+                onSave = { description ->
+                    actualViewModel.addRecord(record.copy(description = description))
+                    showSaveDialog = null
+                },
+                onDiscard = {
+                    showSaveDialog = null
+                }
             )
         }
     }

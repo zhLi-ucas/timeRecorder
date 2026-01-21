@@ -16,10 +16,15 @@ import com.example.timemanager.data.TimerState
 import com.example.timemanager.service.NotificationService
 import com.example.timemanager.ui.components.ReminderType
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class TimerViewModel(application: Application) : AndroidViewModel(application) {
@@ -47,6 +52,24 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _tags = MutableStateFlow<List<Tag>>(emptyList())
     val tags: StateFlow<List<Tag>> = _tags.asStateFlow()
+
+    val displayTags: StateFlow<List<Tag>> = _tags.map { tags ->
+        tags.filter { it.showOnHome }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val otherTags: StateFlow<List<Tag>> = _tags.map { tags ->
+        tags.filter { !it.showOnHome }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _currentSelectedTag = MutableStateFlow<Tag?>(null)
+    val currentSelectedTag: StateFlow<Tag?> = _currentSelectedTag.asStateFlow()
+
+    private val _uiEvent = Channel<UiEvent>()
+    val uiEvent = _uiEvent.receiveAsFlow()
+
+    fun selectTag(tag: Tag) {
+        _currentSelectedTag.value = tag
+    }
 
     private val _durations = MutableStateFlow<List<Int>>(emptyList())
     val durations: StateFlow<List<Int>> = _durations.asStateFlow()
@@ -175,20 +198,22 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun startTask(tag: Tag, description: String, creationType: String = "NORMAL") {
+    fun startTask(tag: Tag? = null, description: String = "", creationType: String = "NORMAL") {
+        val targetTag = tag ?: _currentSelectedTag.value ?: return
+
         val startTime = System.currentTimeMillis()
         
         // Persist state
         prefs.edit().apply {
             putLong(KEY_START_TIME, startTime)
-            putString(KEY_TAG_NAME, tag.name)
+            putString(KEY_TAG_NAME, targetTag.name)
             putString(KEY_DESCRIPTION, description)
             putString(KEY_CREATION_TYPE, creationType)
             apply()
         }
 
         val task = Task(
-            tag = tag.name, // Fixed: Pass String directly
+            tag = targetTag.name, // Fixed: Pass String directly
             durationMinutes = 0,
             isStopwatch = true,
             startTime = startTime,
@@ -219,8 +244,10 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
                 description = description,
                 creationType = creationType
             )
-            timeRecordRepository.addRecord(record)
-            loadRecords()
+            // Trigger UI event instead of saving immediately
+            viewModelScope.launch {
+                _uiEvent.send(UiEvent.ShowSaveRecordDialog(record))
+            }
         }
 
         // Clear state
@@ -400,4 +427,8 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         timerJob?.cancel()
         reminderJob?.cancel()
     }
+}
+
+sealed interface UiEvent {
+    data class ShowSaveRecordDialog(val record: TimeRecord) : UiEvent
 }
