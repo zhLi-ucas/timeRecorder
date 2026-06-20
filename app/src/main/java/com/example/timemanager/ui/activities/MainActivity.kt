@@ -33,13 +33,18 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.timemanager.ui.screens.CategoryManagerScreen
+import com.example.timemanager.ui.screens.ProjectManagerScreen
 import com.example.timemanager.ui.screens.RecordScreen
 import com.example.timemanager.ui.screens.ReviewScreen
+import com.example.timemanager.ui.screens.SettingsScreen
+import com.example.timemanager.ui.screens.SettingsSubpage
 import com.example.timemanager.ui.screens.StatsScreen
 import com.example.timemanager.ui.screens.TodayLedgerScreen
 import com.example.timemanager.ui.theme.TimeManagerTheme
 import com.example.timemanager.viewmodel.RecordViewModel
 import com.example.timemanager.viewmodel.ReviewViewModel
+import com.example.timemanager.viewmodel.SettingsViewModel
 import com.example.timemanager.viewmodel.StatsViewModel
 import com.example.timemanager.viewmodel.TodayLedgerViewModel
 
@@ -90,6 +95,11 @@ fun AppContent() {
         viewModelStoreOwner = app as ViewModelStoreOwner,
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(app)
     )
+    val settingsVm: SettingsViewModel = viewModel(
+        viewModelStoreOwner = app as ViewModelStoreOwner,
+        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(app)
+    )
+    var settingsSubpage by rememberSaveable { mutableStateOf(SettingsSubpage.ROOT) }
 
     val showBottomBar = currentScreen != Screen.RECORD
 
@@ -133,7 +143,20 @@ fun AppContent() {
                 )
                 Screen.STATS -> StatsScreen(viewModel = statsVm)
                 Screen.REVIEW -> ReviewScreen(viewModel = reviewVm)
-                else -> PlaceholderTab(currentScreen.label)
+                Screen.SETTINGS -> when (settingsSubpage) {
+                    SettingsSubpage.ROOT -> SettingsScreen(
+                        viewModel = settingsVm,
+                        onNavigate = { settingsSubpage = it }
+                    )
+                    SettingsSubpage.CATEGORIES -> CategoryManagerScreen(
+                        viewModel = settingsVm,
+                        onBack = { settingsSubpage = SettingsSubpage.ROOT }
+                    )
+                    SettingsSubpage.PROJECTS -> ProjectManagerScreen(
+                        viewModel = settingsVm,
+                        onBack = { settingsSubpage = SettingsSubpage.ROOT }
+                    )
+                }
             }
         }
     }
