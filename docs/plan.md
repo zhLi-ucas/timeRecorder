@@ -369,7 +369,7 @@ Screen.SETTINGS   设置（分类/项目管理 + 导出/备份）
 [x] Phase 0  决策对齐（§6 已确认）
 [x] Phase 1  清理与地基
 [x] Phase 2  数据层（Room + 默认数据）
-[ ] Phase 3  今日账本（时间线 + 拖拽）
+[x] Phase 3  今日账本（时间线 + 拖拽）
 [ ] Phase 4  记一笔（单一录入表单）
 [ ] Phase 5  统计页
 [ ] Phase 6  复盘页（日/周/月）

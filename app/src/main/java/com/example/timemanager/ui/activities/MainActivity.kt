@@ -1,5 +1,6 @@
 package com.example.timemanager.ui.activities
 
+import android.app.Application
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -28,7 +29,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.timemanager.ui.screens.TodayLedgerScreen
 import com.example.timemanager.ui.theme.TimeManagerTheme
+import com.example.timemanager.viewmodel.TodayLedgerViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -76,13 +82,36 @@ fun AppContent() {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
-            contentAlignment = Alignment.Center
+                .padding(padding)
         ) {
-            Text(
-                text = currentScreen.label,
-                style = MaterialTheme.typography.headlineMedium
-            )
+            when (currentScreen) {
+                Screen.TODAY -> TodayTab()
+                else -> PlaceholderTab(currentScreen.label)
+            }
         }
+    }
+}
+
+@Composable
+private fun TodayTab() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val app = context.applicationContext as Application
+    val vm: TodayLedgerViewModel = viewModel(
+        viewModelStoreOwner = app as ViewModelStoreOwner,
+        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(app)
+    )
+    TodayLedgerScreen(viewModel = vm)
+}
+
+@Composable
+private fun PlaceholderTab(label: String) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.headlineMedium
+        )
     }
 }
