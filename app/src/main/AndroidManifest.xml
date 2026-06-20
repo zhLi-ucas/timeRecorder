@@ -2,7 +2,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
@@ -26,12 +25,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity
-            android:name=".ui.activities.AmbientDisplayActivity"
-            android:exported="false"
-            android:theme="@style/Theme.TimeManager"
-            android:screenOrientation="landscape"
-            android:launchMode="singleTask" />
     </application>
 
 </manifest>
