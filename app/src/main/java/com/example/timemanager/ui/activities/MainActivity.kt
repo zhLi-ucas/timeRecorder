@@ -34,9 +34,11 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.timemanager.ui.screens.RecordScreen
+import com.example.timemanager.ui.screens.StatsScreen
 import com.example.timemanager.ui.screens.TodayLedgerScreen
 import com.example.timemanager.ui.theme.TimeManagerTheme
 import com.example.timemanager.viewmodel.RecordViewModel
+import com.example.timemanager.viewmodel.StatsViewModel
 import com.example.timemanager.viewmodel.TodayLedgerViewModel
 
 class MainActivity : ComponentActivity() {
@@ -75,6 +77,10 @@ fun AppContent() {
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(app)
     )
     val recordVm: RecordViewModel = viewModel(
+        viewModelStoreOwner = app as ViewModelStoreOwner,
+        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(app)
+    )
+    val statsVm: StatsViewModel = viewModel(
         viewModelStoreOwner = app as ViewModelStoreOwner,
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(app)
     )
@@ -119,6 +125,7 @@ fun AppContent() {
                     onDone = { currentScreen = Screen.TODAY },
                     onCancel = { currentScreen = Screen.TODAY }
                 )
+                Screen.STATS -> StatsScreen(viewModel = statsVm)
                 else -> PlaceholderTab(currentScreen.label)
             }
         }
