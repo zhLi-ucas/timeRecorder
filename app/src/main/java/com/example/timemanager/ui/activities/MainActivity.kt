@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.AutoStories
@@ -32,8 +33,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.timemanager.ui.screens.RecordScreen
 import com.example.timemanager.ui.screens.TodayLedgerScreen
 import com.example.timemanager.ui.theme.TimeManagerTheme
+import com.example.timemanager.viewmodel.RecordViewModel
 import com.example.timemanager.viewmodel.TodayLedgerViewModel
 
 class MainActivity : ComponentActivity() {
@@ -63,18 +66,33 @@ enum class Screen(val label: String, val icon: ImageVector) {
 
 @Composable
 fun AppContent() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val app = context.applicationContext as Application
     var currentScreen by rememberSaveable { mutableStateOf(Screen.TODAY) }
+
+    val todayVm: TodayLedgerViewModel = viewModel(
+        viewModelStoreOwner = app as ViewModelStoreOwner,
+        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(app)
+    )
+    val recordVm: RecordViewModel = viewModel(
+        viewModelStoreOwner = app as ViewModelStoreOwner,
+        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(app)
+    )
+
+    val showBottomBar = currentScreen != Screen.RECORD
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                Screen.entries.forEach { screen ->
-                    NavigationBarItem(
-                        selected = screen == currentScreen,
-                        onClick = { currentScreen = screen },
-                        icon = { Icon(screen.icon, contentDescription = screen.label) },
-                        label = { Text(screen.label) }
-                    )
+            if (showBottomBar) {
+                NavigationBar {
+                    Screen.entries.forEach { screen ->
+                        NavigationBarItem(
+                            selected = screen == currentScreen,
+                            onClick = { currentScreen = screen },
+                            icon = { Icon(screen.icon, contentDescription = screen.label) },
+                            label = { Text(screen.label) }
+                        )
+                    }
                 }
             }
         }
@@ -85,22 +103,26 @@ fun AppContent() {
                 .padding(padding)
         ) {
             when (currentScreen) {
-                Screen.TODAY -> TodayTab()
+                Screen.TODAY -> TodayLedgerScreen(
+                    viewModel = todayVm,
+                    onRecordClick = {
+                        recordVm.startNew()
+                        currentScreen = Screen.RECORD
+                    },
+                    onEditEntry = { id ->
+                        recordVm.loadForEdit(id)
+                        currentScreen = Screen.RECORD
+                    }
+                )
+                Screen.RECORD -> RecordScreen(
+                    viewModel = recordVm,
+                    onDone = { currentScreen = Screen.TODAY },
+                    onCancel = { currentScreen = Screen.TODAY }
+                )
                 else -> PlaceholderTab(currentScreen.label)
             }
         }
     }
-}
-
-@Composable
-private fun TodayTab() {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val app = context.applicationContext as Application
-    val vm: TodayLedgerViewModel = viewModel(
-        viewModelStoreOwner = app as ViewModelStoreOwner,
-        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(app)
-    )
-    TodayLedgerScreen(viewModel = vm)
 }
 
 @Composable

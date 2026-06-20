@@ -32,8 +32,14 @@ interface TimeEntryDao {
     @Query("SELECT * FROM time_entries WHERE date = :date ORDER BY startMinOfDay ASC")
     suspend fun getByDate(date: LocalDate): List<TimeEntryEntity>
 
+    @Query("SELECT * FROM time_entries WHERE id = :id")
+    suspend fun getByIdOnce(id: String): TimeEntryEntity?
+
     @Query("SELECT * FROM time_entries WHERE date BETWEEN :from AND :to ORDER BY date, startMinOfDay")
     suspend fun getByDateRange(from: LocalDate, to: LocalDate): List<TimeEntryEntity>
+
+    @Query("SELECT * FROM time_entries WHERE date BETWEEN :from AND :to ORDER BY date, startMinOfDay")
+    fun observeByDateRange(from: LocalDate, to: LocalDate): Flow<List<TimeEntryEntity>>
 
     @Query("SELECT COALESCE(MAX(startMinOfDay + durationMin), 0) FROM time_entries WHERE date = :date")
     suspend fun getMaxEndMinOfDay(date: LocalDate): Int

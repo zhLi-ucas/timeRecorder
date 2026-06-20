@@ -31,7 +31,11 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Composable
-fun TodayLedgerScreen(viewModel: TodayLedgerViewModel) {
+fun TodayLedgerScreen(
+    viewModel: TodayLedgerViewModel,
+    onRecordClick: () -> Unit,
+    onEditEntry: (String) -> Unit
+) {
     val uiState by viewModel.uiState.collectAsState()
     val selectedDate by viewModel.selectedDate.collectAsState()
     val context = LocalContext.current
@@ -47,7 +51,7 @@ fun TodayLedgerScreen(viewModel: TodayLedgerViewModel) {
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(onClick = { viewModel.insertDebugEntry() }) {
+            FloatingActionButton(onClick = onRecordClick) {
                 Icon(Icons.Filled.Add, contentDescription = "记一笔")
             }
         }
@@ -61,7 +65,11 @@ fun TodayLedgerScreen(viewModel: TodayLedgerViewModel) {
             if (uiState.entries.isEmpty()) {
                 EmptyTimeline()
             } else {
-                DayTimeline(entries = uiState.entries, viewModel = viewModel)
+                DayTimeline(
+                    entries = uiState.entries,
+                    viewModel = viewModel,
+                    onTapEntry = onEditEntry
+                )
             }
         }
     }

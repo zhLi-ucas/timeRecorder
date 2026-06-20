@@ -1,6 +1,7 @@
 package com.example.timemanager.ui.components
 
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -24,6 +25,7 @@ import kotlin.math.sign
 fun DayTimeline(
     entries: List<TimeEntryWithCategory>,
     viewModel: TodayLedgerViewModel,
+    onTapEntry: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
@@ -40,6 +42,9 @@ fun DayTimeline(
                 dragOffsetY = if (isDragging) dragOffsetY else 0f,
                 modifier = Modifier
                     .zIndex(if (isDragging) 1f else 0f)
+                    .pointerInput(item.entry.id) {
+                        detectTapGestures(onTap = { onTapEntry(item.entry.id) })
+                    }
                     .pointerInput(item.entry.id) {
                         detectDragGesturesAfterLongPress(
                             onDragStart = {
