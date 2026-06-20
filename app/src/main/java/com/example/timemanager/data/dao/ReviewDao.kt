@@ -8,6 +8,7 @@ import androidx.room.Query
 import androidx.room.Update
 import com.example.timemanager.data.entity.ReviewEntity
 import kotlinx.coroutines.flow.Flow
+import java.time.LocalDate
 
 @Dao
 interface ReviewDao {
@@ -22,6 +23,12 @@ interface ReviewDao {
 
     @Query("SELECT * FROM reviews WHERE id = :id")
     suspend fun getById(id: String): ReviewEntity?
+
+    @Query("SELECT * FROM reviews WHERE periodType = :type AND periodStart = :start AND periodEnd = :end LIMIT 1")
+    suspend fun getByPeriod(type: String, start: LocalDate, end: LocalDate): ReviewEntity?
+
+    @Query("SELECT * FROM reviews WHERE periodType = :type ORDER BY createdAt DESC")
+    fun observeByType(type: String): Flow<List<ReviewEntity>>
 
     @Query("SELECT * FROM reviews ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<ReviewEntity>>

@@ -34,10 +34,12 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.timemanager.ui.screens.RecordScreen
+import com.example.timemanager.ui.screens.ReviewScreen
 import com.example.timemanager.ui.screens.StatsScreen
 import com.example.timemanager.ui.screens.TodayLedgerScreen
 import com.example.timemanager.ui.theme.TimeManagerTheme
 import com.example.timemanager.viewmodel.RecordViewModel
+import com.example.timemanager.viewmodel.ReviewViewModel
 import com.example.timemanager.viewmodel.StatsViewModel
 import com.example.timemanager.viewmodel.TodayLedgerViewModel
 
@@ -84,6 +86,10 @@ fun AppContent() {
         viewModelStoreOwner = app as ViewModelStoreOwner,
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(app)
     )
+    val reviewVm: ReviewViewModel = viewModel(
+        viewModelStoreOwner = app as ViewModelStoreOwner,
+        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(app)
+    )
 
     val showBottomBar = currentScreen != Screen.RECORD
 
@@ -126,6 +132,7 @@ fun AppContent() {
                     onCancel = { currentScreen = Screen.TODAY }
                 )
                 Screen.STATS -> StatsScreen(viewModel = statsVm)
+                Screen.REVIEW -> ReviewScreen(viewModel = reviewVm)
                 else -> PlaceholderTab(currentScreen.label)
             }
         }
