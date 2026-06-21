@@ -32,6 +32,12 @@
 
 **v1.1 候选**：自定义统计范围、分类拖拽排序、分类调色色板 UI、记一笔项目字段、年度按月柱状图、ProGuard 规则与 release 签名。
 
+## 分类持久化行为
+
+`DefaultDataSeeder` 由 `KEY_SEEDED` AppSetting 守护，**仅在首启 seed 一次**。用户在设置页对分类做的修改（重命名、归档、新增）**在 app 更新后保留**，不会被覆盖。
+
+**例外**：v1.1（2026-06-21）一次性借 `fallbackToDestructiveMigration` 把 Room v1 DB 整库清掉重建，用于套用新的 5 一级 + 13 二级 seed 列表（用户授权，旧数据是测试用）。后续版本若再改 schema 必须写显式 Migration。
+
 ## 项目结构
 
 ```
