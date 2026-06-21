@@ -4,13 +4,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -18,10 +15,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 
-private val QUICK_OPTIONS = listOf(15, 30, 60, 90, 120)
+private val QUICK_OPTIONS = listOf(30, 60)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -30,9 +26,9 @@ fun DurationInput(
     onMinChange: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var customText by remember(currentMin) {
-        mutableStateOf(if (currentMin in QUICK_OPTIONS) "" else currentMin.toString())
-    }
+    var showSheet by remember { mutableStateOf(false) }
+    val isQuick = currentMin in QUICK_OPTIONS
+    val isCustom = !isQuick
 
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
@@ -47,38 +43,35 @@ fun DurationInput(
             QUICK_OPTIONS.forEach { min ->
                 FilterChip(
                     selected = currentMin == min,
-                    onClick = {
-                        customText = ""
-                        onMinChange(min)
-                    },
+                    onClick = { onMinChange(min) },
                     label = { Text("${min}m") }
                 )
             }
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp),
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            OutlinedTextField(
-                value = customText,
-                onValueChange = { text ->
-                    customText = text.filter { it.isDigit() }
-                    val parsed = customText.toIntOrNull()
-                    if (parsed != null) onMinChange(parsed)
-                },
-                label = { Text("自定义（分钟）") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                text = "当前：${currentMin}m",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            FilterChip(
+                selected = isCustom,
+                onClick = { showSheet = true },
+                label = { Text("自定义") }
             )
         }
+        Text(
+            text = "当前：${formatDuration(currentMin)}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp)
+        )
     }
+
+    if (showSheet) {
+        DurationPickerSheet(
+            initialMinutes = if (isCustom) currentMin else 0,
+            onConfirm = onMinChange,
+            onDismiss = { showSheet = false }
+        )
+    }
+}
+
+private fun formatDuration(min: Int): String {
+    val h = min / 60
+    val m = min % 60
+    return if (h > 0) "${h}h ${m}m" else "${m}m"
 }
