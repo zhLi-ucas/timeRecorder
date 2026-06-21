@@ -1,101 +1,106 @@
-# TimeManager Project Documentation
+# TimeManager
 
-## 简介
-TimeManager 是一款 Android 时间管理应用，基于 Jetpack Compose 开发。它摒弃了传统的后台即时计时模式，采用更优雅的“起止点”记录方案，横屏时钟体验，帮助用户轻松追踪时间。同时内置喝水与久坐提醒功能，关注用户健康。
+基于**柳比歇夫时间统计法**的 Android 时间账本 App（Jetpack Compose + Material3 + Room）。
 
-## 重大版本重构与实施规划 (Major Refactoring & Implementation Plan)
+录入只填**分类 + 时长**，时间线靠默认堆叠（紧贴 back-to-back）+ 长按拖拽 reorder；不做实时计时器、不做健康提醒、不做 todo —— 只做时间账本 + 分类统计 + 周期复盘 + 数据导出。
 
-### 前端修改要求 (Frontend Requirements)
-1. 暂无
-   - [ ] step1
-   - [ ] step2
-   - [ ] step3
-   - [ ] ...
+## 核心特性
 
-### 后端修改要求 (Backend Requirements)
-*(注：此处后端指代应用内部数据层与逻辑层，或将来扩展的服务端)*
+- **Duration-first 录入**：选日期 → 一级/二级分类 → 时长（chip + 自定义）→ 标题（可选）→ 保存，30 秒一条
+- **今日时间线**：block 默认从默认起点（08:00）紧贴堆叠；点击编辑、长按菜单删除
+- **长按拖拽 reorder**：5 分钟 snap + cascade shift（重叠时下方 block 整体后移）；越过 24:00 拒绝
+- **统计聚合**：日/周/月/年 4 范围；一/二级分类横向条形 + 百分比
+- **周期复盘**：日 / 周 / 月三套模板字段，历史可回溯
+- **分类 / 项目管理**：8 默认一级 + 34 二级，可归档、可新增；项目作为可选统计维度
+- **导出 / 备份**：CSV / Markdown 报表 + JSON 全量备份与恢复
+- **暗色主题**：跟随系统，分类色板 light/dark 双色
+- **持久化**：Room (SQLite)，App 重启 / Activity 重建均不丢状态
 
-1. 暂无
-   - [ ] step1
-   - [ ] step2
-   - [ ] step3
-   - [ ] ...
+## 重大版本重构与实施规划
 
-## 当前功能 (Current Features)
+柳比歇夫法 v1 已完成全部 8 个阶段（详见 `docs/plan.md`）：
 
-*   **时间追踪 (Time Tracking)**:
-    *   **快速启动**: 长按开始按钮直接以当前选中的标签开始计时。
-    *   **滑动选择**: 主页支持左右滑动切换常用的“展示标签 (Show Tags)”。
-    *   **二级选择**: 提供“其他”选项，支持从完整列表中选择标签。
-    *   **完成确认**: 停止计时后自动弹出对话框，用于补充任务描述。
-    *   支持后台运行（基于时间戳计算，无需常驻后台服务）。
-*   **健康提醒 (Health Reminders)**:
-    *   内置“喝水”与“久坐”提醒。
-    *   可视化进度展示：
-        *   **温度计 (Thermometer)**: 动态显示提醒倒计时进度。
-        *   **进度按钮 (ReminderButton)**: 圆形进度指示。
-*   **历史记录 (History)**:
-    *   按时间倒序查看所有任务记录。
-    *   本地 JSON 持久化存储。
-*   **标签系统 (Tag System)**:
-    *   自定义任务标签（Working, Learning, Playing 等）。
-    *   **首页展示管理**: 在设置中可配置哪些标签显示在主页滑动列表中。
-    *   支持标签颜色管理。
-*   **专注模式 (Ambient Mode)**:
-    *   提供纯净的横屏时钟显示 (`AmbientDisplayActivity`)。
+- [x] Phase 0 — 决策对齐
+- [x] Phase 1 — 清理旧体系（删除 Task / TimeRecord / Tag / HealthRecord / AmbientDisplay 等 21 个旧文件）+ 5-tab 骨架
+- [x] Phase 2 — Room schema + 默认数据 seeder（42 分类 + 6 设置项）
+- [x] Phase 3 — 今日账本时间线 + 长按拖拽 reorder + cascade shift
+- [x] Phase 4 — 记一笔单表单 + tap-to-edit + 越界拒绝
+- [x] Phase 5 — 统计 4 范围（日/周/月/年）+ 一/二级分类条形展开
+- [x] Phase 6 — 复盘日/周/月模板 + 历史列表
+- [x] Phase 7 — 设置：分类/项目管理 + 默认起点 + CSV/MD/JSON 导出 + JSON 恢复
+- [x] Phase 8 — 暗色主题适配 + 锁竖屏 + 新启动图标 + Lint/test 通过 + README 重写
 
-## 项目结构说明 (Project Structure)
+**v1.1 候选**：自定义统计范围、分类拖拽排序、分类调色色板 UI、记一笔项目字段、年度按月柱状图、ProGuard 规则与 release 签名。
 
-项目源代码位于 `app/src/main/java/com/example/timemanager/`，采用标准的 MVVM 架构。
+## 项目结构
 
-### 1. UI 层 (`ui/`)
+```
+app/src/main/java/com/example/timemanager/
+├── TimeManagerApplication.kt        Application + ViewModelStoreOwner（5 个 VM 挂这）
+├── data/
+│   ├── DefaultDataSeeder.kt         首启 seed 42 分类 + day_start_min=480
+│   ├── converter/Converters.kt      LocalDate/LocalDateTime ↔ epoch
+│   ├── dao/                          TimeEntry / Category / Project / Review / AppSetting
+│   ├── db/AppDatabase.kt            Room v1 单例
+│   └── entity/                      5 个 @Entity
+├── ui/
+│   ├── activities/MainActivity.kt   5-tab NavigationBar + Screen enum
+│   ├── components/                  CategoryColors / CategoryPicker / CategoryBar
+│   │                                DayTimeline / TimelineBlock / DurationInput
+│   ├── screens/                     TodayLedger / Record / Stats / Review / Settings
+│   │                                + CategoryManager / ProjectManager 子页
+│   └── theme/                       Color / Type / Theme（M3，跟随系统暗色）
+├── util/                            TimeText / DateRange / CsvExporter
+└── viewmodel/                       TodayLedger / Record / Stats / Review / Settings
+                                    全部 Application scoped
+```
 
-*   **Activities (`ui/activities/`)**
-    *   [`MainActivity.kt`](app/src/main/java/com/example/timemanager/ui/activities/MainActivity.kt): 应用主入口。
-    *   [`AmbientDisplayActivity.kt`](app/src/main/java/com/example/timemanager/ui/activities/AmbientDisplayActivity.kt): 独立的专注模式 Activity。
+数据层 5 张表：`time_entries` / `categories` / `projects` / `reviews` / `app_settings`。
 
-*   **Screens (`ui/screens/`)**
-    *   [`HomeScreen.kt`](app/src/main/java/com/example/timemanager/ui/screens/HomeScreen.kt): 主页，集成 `HorizontalPager` 实现标签滑动选择，包含计时控制与提醒。
-    *   [`TimeRecordsScreen.kt`](app/src/main/java/com/example/timemanager/ui/screens/TimeRecordsScreen.kt): 历史记录列表。
-    *   [`OptionsScreen.kt`](app/src/main/java/com/example/timemanager/ui/screens/OptionsScreen.kt): 设置页，包含标签管理（新增首页展示开关）。
-    *   [`AmbientDisplayScreen.kt`](app/src/main/java/com/example/timemanager/ui/screens/AmbientDisplayScreen.kt): 专注模式 UI 实现。
+## 构建与运行
 
-*   **Components (`ui/components/`)**
-    *   [`StartButton.kt`](app/src/main/java/com/example/timemanager/ui/components/StartButton.kt): 计时控制按钮，支持长按启动。
-    *   [`FinishTaskDialog.kt`](app/src/main/java/com/example/timemanager/ui/components/FinishTaskDialog.kt): 任务结束时的编辑对话框。
-    *   [`ThermometerReminder.kt`](app/src/main/java/com/example/timemanager/ui/components/ThermometerReminder.kt): 垂直温度计样式的提醒进度条。
-    *   [`ReminderButton.kt`](app/src/main/java/com/example/timemanager/ui/components/ReminderButton.kt): 圆形提醒按钮。
-    *   [`TagSelectionDialog.kt`](app/src/main/java/com/example/timemanager/ui/components/TagSelectionDialog.kt): 通用标签选择对话框。
+```bash
+# 构建 Debug APK
+./gradlew assembleDebug
 
-### 2. 逻辑层 (`viewmodel/`)
+# 安装到连接的设备 / 模拟器
+./gradlew installDebug
 
-*   [`TimerViewModel.kt`](app/src/main/java/com/example/timemanager/viewmodel/TimerViewModel.kt):
-    *   **核心状态管理**: 统一管理计时状态、提醒倒计时、当前标签。
-    *   **标签分类**: 区分 `displayTags` (首页展示) 和 `otherTags`。
-    *   **生命周期感知**: 处理应用前后台切换时的时间差计算。
+# 启动 MainActivity
+adb shell am start -n com.example.timemanager/.ui.activities.MainActivity
 
-### 3. 数据层 (`data/`)
+# JVM 单元测试
+./gradlew test
 
-*   **Repositories**:
-    *   [`TimeRecordRepository.kt`](app/src/main/java/com/example/timemanager/data/TimeRecordRepository.kt): 管理时间记录，使用 `time_records.json` 进行本地存储。
-    *   [`HealthRecordRepository.kt`](app/src/main/java/com/example/timemanager/data/HealthRecordRepository.kt): 管理健康/提醒打卡记录，使用 `health_records.json` 存储。
-    *   [`TagRepository.kt`](app/src/main/java/com/example/timemanager/data/TagRepository.kt): 管理标签数据，支持 `showOnHome` 字段持久化。
+# Android Lint
+./gradlew lint
+```
 
-*   **Models**:
-    *   `Tag`: 包含 `name`, `color`, `showOnHome`。
-    *   `Task`, `TimeRecord`, `HealthRecord`, `TimerState`.
+### 本机工具链
 
-### 4. 服务 (`service/`)
+| 工具 | 路径 |
+|---|---|
+| JDK 21（Android Studio JBR） | `D:/Work/Androids/Studio/jbr/bin/java` |
+| Android SDK | `C:/Users/laozihao/AppData/Local/Android/Sdk` |
+| `adb.exe` | `C:/Users/laozihao/AppData/Local/Android/Sdk/platform-tools/adb.exe` |
+| `compileSdk` / `targetSdk` | 36 |
+| `minSdk` | 24（启用 core library desugaring 支持 `java.time`） |
+| 物理设备 | Xiaomi 2407FRK8EC，Android 16 |
 
-*   [`NotificationService.kt`](app/src/main/java/com/example/timemanager/service/NotificationService.kt):
-    *   处理系统通知发送（如提醒时间到）。
+## 关键不变量（贡献前必读）
 
-## 技术栈 (Tech Stack)
+详见 `CLAUDE.md`，简述：
 
-*   **语言**: Kotlin
-*   **UI 框架**: Jetpack Compose (Material3)
-*   **架构模式**: MVVM (Model-View-ViewModel)
-*   **数据存储**:
-    *   JSON 文件存储 (Complex Data)
-    *   SharedPreferences (Settings & Tags)
-*   **构建工具**: Gradle Kotlin DSL
+1. **`TimerViewModel` 旧体系已删**。新 ViewModel 挂在 `TimeManagerApplication` 的 `appViewModelStore` 上，跨 Activity 重建存活 —— 不要把 ViewModel scope 到 Activity。
+2. **duration-first**。`TimeEntry` 的 `startMinOfDay` 由"当天已有 entry 的最大 endMinOfDay"派生（当天空时取 `day_start_min`），用户不输入开始时间。
+3. **block 默认 back-to-back 紧贴**。不做空白段保留；过渡时段要么显式建 entry，要么被前后段吸收。
+4. **拖拽同步写库**，由 Mutex 序列化 reorder 操作避免竞态。
+5. **不做实时计时器 / 健康提醒 / Ambient Mode / 完整率指标**。这些是 v0 旧设计，已彻底删除。
+
+## 技术栈
+
+- Kotlin + Coroutines
+- Jetpack Compose + Material3（跟随系统暗色）
+- Room 2.6.1 + KSP 2.0.21-1.0.27
+- 手写 `Screen` 枚举 + `rememberSaveable` + `BackHandler` 导航（无 Navigation Compose / Hilt）
+- SAF（Storage Access Framework）做文件导出 / 恢复
