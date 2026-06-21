@@ -89,15 +89,15 @@ class TimeEntryDaoTest {
         DefaultDataSeeder(db).seedIfNeeded()
 
         val first = db.categoryDao().getFirstLevel()
-        assertEquals(8, first.size)
-        assertEquals("核心工作", first[0].name)
+        assertEquals(5, first.size)
+        assertEquals("工作", first[0].name)
         assertEquals("blue", first[0].colorKey)
-        assertEquals("未分类", first[7].name)
-        assertTrue(first[7].isSystem)
+        assertEquals("其他", first[4].name)
+        assertTrue(first[4].isSystem)
 
-        val secondOfCore = db.categoryDao().getSecondLevel("cat_core_work")
-        assertEquals(5, secondOfCore.size)
-        assertEquals("写作", secondOfCore[0].name)
+        val secondOfWork = db.categoryDao().getSecondLevel("cat_work")
+        assertEquals(4, secondOfWork.size)
+        assertEquals("实验", secondOfWork[0].name)
 
         assertEquals("true", db.appSettingDao().getByKey("seeded"))
         assertEquals("480", db.appSettingDao().getByKey("day_start_min"))

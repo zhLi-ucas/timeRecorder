@@ -16,14 +16,11 @@ class DefaultDataSeeder(private val db: AppDatabase) {
     private suspend fun seed() {
         val now = LocalDateTime.now()
         val firstLevel = listOf(
-            Triple("cat_core_work", "核心工作", "blue"),
-            Triple("cat_aux_work", "辅助工作", "cyan"),
-            Triple("cat_study", "学习研究", "green"),
-            Triple("cat_daily", "日常事务", "amber"),
-            Triple("cat_rest", "休息恢复", "orange"),
-            Triple("cat_social", "社交沟通", "purple"),
+            Triple("cat_work", "工作", "blue"),
+            Triple("cat_rest", "休息", "cyan"),
+            Triple("cat_self", "自我实现", "orange"),
             Triple("cat_invalid", "无效消耗", "grey"),
-            Triple("cat_uncategorized", "未分类", "neutral")
+            Triple("cat_other", "其他", "neutral")
         )
         firstLevel.forEachIndexed { index, (id, name, colorKey) ->
             db.categoryDao().insert(
@@ -34,7 +31,7 @@ class DefaultDataSeeder(private val db: AppDatabase) {
                     colorKey = colorKey,
                     sortOrder = index,
                     isArchived = false,
-                    isSystem = id == "cat_uncategorized",
+                    isSystem = id == "cat_other",
                     createdAt = now,
                     updatedAt = now
                 )
@@ -42,14 +39,11 @@ class DefaultDataSeeder(private val db: AppDatabase) {
         }
 
         val secondLevel = listOf(
-            "cat_core_work" to listOf("写作" to "writing", "编程" to "coding", "实验" to "experiment", "设计" to "design", "深度思考" to "thinking"),
-            "cat_aux_work" to listOf("资料整理" to "organizing", "文件管理" to "files", "环境配置" to "env", "沟通协调" to "comm", "行政事务" to "admin"),
-            "cat_study" to listOf("阅读" to "reading", "查资料" to "lookup", "做笔记" to "notes", "听课" to "class", "复习" to "review"),
-            "cat_daily" to listOf("家务" to "chores", "通勤" to "commute", "购物" to "shopping", "用餐" to "meal", "生活处理" to "life"),
-            "cat_rest" to listOf("睡眠" to "sleep", "午休" to "noon", "散步" to "walk", "娱乐" to "fun", "运动" to "exercise"),
-            "cat_social" to listOf("聊天" to "chat", "会议" to "meeting", "电话" to "call", "线上交流" to "online"),
-            "cat_invalid" to listOf("无目标浏览" to "browse", "被动刷视频" to "video", "无效等待" to "wait", "反复切换" to "switch"),
-            "cat_uncategorized" to listOf("待整理" to "pending")
+            "cat_work" to listOf("实验" to "experiment", "阅读" to "reading", "写论文" to "paper", "思考" to "thinking"),
+            "cat_rest" to listOf("放空" to "space", "游戏" to "game", "阅读" to "reading"),
+            "cat_self" to listOf("规划" to "plan", "户外" to "outdoor", "室内" to "indoor"),
+            "cat_invalid" to listOf("无效等待" to "wait", "被动阅读" to "passive"),
+            "cat_other" to listOf("待分类" to "pending")
         )
         secondLevel.forEach { (parentId, children) ->
             children.forEachIndexed { index, (name, slug) ->
