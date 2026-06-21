@@ -50,6 +50,15 @@ class TodayLedgerViewModel(application: Application) : AndroidViewModel(applicat
     private val _selectedDate = MutableStateFlow(LocalDate.now())
     val selectedDate: StateFlow<LocalDate> = _selectedDate.asStateFlow()
 
+    fun setDate(date: LocalDate) {
+        val today = LocalDate.now()
+        _selectedDate.value = if (date.isAfter(today)) today else date
+    }
+
+    fun shiftDays(delta: Int) {
+        setDate(_selectedDate.value.plusDays(delta.toLong()))
+    }
+
     private val _uiEvent = Channel<TodayUiEvent>(Channel.BUFFERED)
     val uiEvent = _uiEvent.receiveAsFlow()
 
@@ -87,7 +96,7 @@ class TodayLedgerViewModel(application: Application) : AndroidViewModel(applicat
                 for (e in current) {
                     cursor += e.durationMin
                     if (cursor > 1440) {
-                        _uiEvent.send(TodayUiEvent.ShowToast("今日已排满，请先调整已有条目"))
+                        _uiEvent.send(TodayUiEvent.ShowToast("该日已排满，请先调整已有条目"))
                         return@withLock
                     }
                 }
@@ -113,7 +122,7 @@ class TodayLedgerViewModel(application: Application) : AndroidViewModel(applicat
                 val start = if (maxEnd == 0) dayStart else maxEnd
                 val duration = 60
                 if (start + duration > 1440) {
-                    _uiEvent.send(TodayUiEvent.ShowToast("今日已排满"))
+                    _uiEvent.send(TodayUiEvent.ShowToast("该日已排满"))
                     return@withLock
                 }
 

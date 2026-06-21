@@ -36,6 +36,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.TextButton
 import com.example.timemanager.ui.components.CategoryPicker
@@ -46,6 +47,7 @@ import com.example.timemanager.viewmodel.RecordViewModel
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -164,7 +166,16 @@ private fun DateRow(date: LocalDate, onDateChange: (LocalDate) -> Unit) {
             initialSelectedDateMillis = date
                 .atStartOfDay(ZoneId.systemDefault())
                 .toInstant()
-                .toEpochMilli()
+                .toEpochMilli(),
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                    val todayUtcMillis = LocalDate.now()
+                        .atStartOfDay(ZoneOffset.UTC)
+                        .toInstant()
+                        .toEpochMilli()
+                    return utcTimeMillis <= todayUtcMillis
+                }
+            }
         )
         DatePickerDialog(
             onDismissRequest = { showPicker = false },

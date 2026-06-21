@@ -65,8 +65,10 @@ class RecordViewModel(application: Application) : AndroidViewModel(application) 
     private val _uiEvent = Channel<RecordUiEvent>(Channel.BUFFERED)
     val uiEvent = _uiEvent.receiveAsFlow()
 
-    fun startNew() {
-        _form.value = RecordFormState(date = LocalDate.now())
+    fun startNew(initialDate: LocalDate = LocalDate.now()) {
+        val today = LocalDate.now()
+        val safe = if (initialDate.isAfter(today)) today else initialDate
+        _form.value = RecordFormState(date = safe)
     }
 
     fun loadForEdit(entryId: String) {
@@ -115,7 +117,7 @@ class RecordViewModel(application: Application) : AndroidViewModel(application) 
                     if (maxEnd == 0) dayStart else maxEnd
                 }
                 if (startMinOfDay + state.durationMin > 1440) {
-                    _uiEvent.send(RecordUiEvent.Toast("今日已排满，无法添加"))
+                    _uiEvent.send(RecordUiEvent.Toast("该日已排满，无法添加"))
                     return@withLock
                 }
                 val title = state.title.ifBlank {

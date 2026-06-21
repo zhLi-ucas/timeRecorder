@@ -146,7 +146,7 @@ fun AppContent() {
                 Screen.TODAY -> TodayLedgerScreen(
                     viewModel = todayVm,
                     onRecordClick = {
-                        recordVm.startNew()
+                        recordVm.startNew(todayVm.selectedDate.value)
                         currentScreen = Screen.RECORD
                     },
                     onEditEntry = { id ->
