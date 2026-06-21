@@ -4,9 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-TimeManager is an Android time-tracking app built with Jetpack Compose + Material3. The core design principle is **"start/end point" time tracking rather than a constantly-running background service**: a task records only its start timestamp (persisted to `SharedPreferences`), and the duration is computed from `System.currentTimeMillis()` deltas when the user stops the task. This lets timing survive app/process death without a foreground service.
+TimeManager 是一款基于**柳比歇夫时间统计法**的 Android 时间账本 App（Jetpack Compose + Material3 + Room）。录入只填**分类 + 时长**（不输入开始时间），时间线靠默认堆叠 + 长按拖拽 reorder；不做实时计时器、不做健康提醒、不做 todo。
 
-The app also bundles health reminders (water and stand-up), a tag system with home-page visibility, a history view, and a dedicated landscape "Ambient Mode" full-screen clock activity.
+5 个一级 tab（顺序固定）：**记一笔 (RECORD) → 复盘 (REVIEW) → 今日账本 (TODAY) → 统计 (STATS) → 设置 (SETTINGS)**，中间位 TODAY 是常驻 FAB 浮起按钮。首启默认进 TODAY。
+
+当前版本：**v1.1**（2026-06-21）。Phase 1–8（v1）+ v1.1 维护全部完成。
 
 ## Build & Run
 
@@ -44,7 +46,7 @@ The whole toolchain is installed and tested — Claude Code can build, deploy, s
 | `emulator.exe` | `C:/Users/laozihao/AppData/Local/Android/Sdk/emulator/emulator.exe` |
 | Build-tools | 34.0.0, 35.0.0, 36.1.0 |
 | Platforms installed | android-34, android-36 |
-| AVDs configured | **none** — `~/.android/avd` is empty. Use the connected physical device, or run `avdmanager create avd` first if a simulator is needed. |
+| AVDs configured | **none** — `~/.android/avd` is empty. Use the connected physical device (Redmi 2407FRK8EC), or run `avdmanager create avd` first if a simulator is needed. |
 
 A bash helper to avoid typing the full adb path in a session:
 
@@ -55,7 +57,7 @@ ADB="C:/Users/laozihao/AppData/Local/Android/Sdk/platform-tools/adb.exe"
 ### Deploy & inspect on device
 
 ```bash
-# Build + install in one shot
+# Build + installation in one shot
 ./gradlew :app:installDebug
 
 # Or manual install of an existing APK
@@ -71,22 +73,29 @@ $ADB logcat -s AndroidRuntime:E ActivityManager:I
 $ADB devices
 ```
 
-### UI review loop (no MCP required)
+### DB inspection (when MIUI blocks sqlite3 binary)
 
-To "see" the running app and iterate on UI without leaving Claude Code:
+Device `sqlite3` is not accessible under `run-as`. Pull the DB + WAL + SHM and read with Python:
 
 ```bash
-# Capture the current screen to a PNG
-$ADB exec-out screencap -p > /tmp/screen.png
-
-# Then analyze it with the analyze_image tool against a remote URL,
-# or pull and inspect locally.
+$ADB exec-out run-as com.example.timemanager cat databases/timemanager.db     > /tmp/tm.db
+$ADB exec-out run-as com.example.timemanager cat databases/timemanager.db-wal  > /tmp/tm.db-wal
+$ADB exec-out run-as com.example.timemanager cat databases/timemanager.db-shm  > /tmp/tm.db-shm
+python -c "import sqlite3; c=sqlite3.connect('/tmp/tm.db'); print(list(c.execute('SELECT id,name FROM categories')))":
 ```
 
-Note: `mcp__4_5v_mcp__analyze_image` only accepts a **remote URL**, not a local path. For local screenshots, either upload the PNG to a host the session can reach, or describe the issue in text.
+All three files must be pulled together — recent writes may still be in the WAL.
+
+### UI review loop (no MCP required)
+
+`mcp__4_5v_mcp__analyze_image` only accepts a **remote URL**, not a local path. Screencap PNGs go through a CDN with cache keyed on path — repeated `screencap > same/path.png` returns the same URL, so visual verification from this side is unreliable. Rely on:
+
+- `adb shell dumpsys activity activities | grep topResumedActivity` for "did the app crash / is it foregrounded"
+- User actually running the app on the device for visual confirmation
 
 ### Toolchain notes
 - `compileSdk`/`targetSdk` = 36, `minSdk` = 24, Java/JVM target = 11 (the build JRE is 21; Kotlin/Java targets stay at 11 — don't bump without coordinated changes in `app/build.gradle.kts`).
+- **Core library desugaring is enabled** (`desugar_jdk_libs:2.1.5`), so `java.time.*` works on minSdk 24. Don't remove this — large parts of the data layer depend on `LocalDate`/`LocalDateTime`.
 - Aliyun mirrors are **first-class** in `settings.gradle.kts` (with `google()`/`mavenCentral()` as fallback). Don't reorder or remove them — the build machine relies on them for download speed. Any new repository additions should follow the same pattern.
 - Version catalog lives at `gradle/libs.versions.toml`. Add new deps there, not inline.
 - `local.properties` (gitignored) must contain `sdk.dir` — already configured on this machine; do not commit.
@@ -97,67 +106,106 @@ Note: `mcp__4_5v_mcp__analyze_image` only accepts a **remote URL**, not a local 
 
 ### Process-scoped ViewModel via Application scope
 
-`TimeManagerApplication` implements `ViewModelStoreOwner` and exposes a single `appViewModelStore`. `MainActivity.AppContent()` (and any future entry) obtains `TimerViewModel` scoped to the **Application**, not the Activity:
+`TimeManagerApplication` implements `ViewModelStoreOwner` and exposes a single `appViewModelStore`. `MainActivity.AppContent()` obtains every ViewModel scoped to the **Application**, not the Activity:
 
 ```kotlin
-val timerViewModel: TimerViewModel = viewModel(
+val todayVm: TodayLedgerViewModel = viewModel(
     viewModelStoreOwner = application as ViewModelStoreOwner,
     factory = ViewModelProvider.AndroidViewModelFactory.getInstance(application)
 )
 ```
 
-This is intentional — `TimerViewModel` must survive Activity recreation (config changes, Ambient↔Main navigation, back stack) to keep the running task state and reminder loop alive. **Do not scope `TimerViewModel` to an Activity** or you'll lose the running timer on rotation.
+This is intentional — ViewModels must survive Activity recreation (config changes, navigation, back stack). **Do not scope any ViewModel to an Activity** or you'll lose state on rotation.
+
+5 Application-scoped ViewModels: `TodayLedgerViewModel`, `RecordViewModel`, `StatsViewModel`, `ReviewViewModel`, `SettingsViewModel`.
 
 ### In-app navigation
 
-Navigation is hand-rolled via the `Screen` enum in `MainActivity.kt` (`HOME`, `OPTIONS`, `RECORDS`) plus `rememberSaveable` state — **not** Navigation Compose. `AmbientDisplayActivity` is a separate Activity (landscape, fullscreen, `FLAG_KEEP_SCREEN_ON`) reached via `Intent`. When adding new screens, follow the same enum + `BackHandler` pattern unless migrating to Navigation Compose.
+5-tab bottom navigation is hand-rolled via the `Screen` enum in `MainActivity.kt` + `rememberSaveable` state — **not** Navigation Compose. Order is fixed:
 
-### `TimerViewModel` is the source of truth
+```kotlin
+enum class Screen(val label: String, val icon: ImageVector) {
+    RECORD, REVIEW, TODAY, STATS, SETTINGS
+}
+```
 
-`viewmodel/TimerViewModel.kt` owns all state and is intentionally large. Key invariants:
+The bottom bar is a **custom composable** (`HomeBottomBar.kt`), not Material3 `NavigationBar`, because the middle slot (TODAY) is a常驻 `FloatingActionButton` that protrudes 16dp above the bar. Don't switch back to `NavigationBar` without losing the FAB styling.
 
-- **Ongoing task is persisted in `SharedPreferences` ("timer_prefs")**, keys prefixed `ongoing_*`. On `init`, `checkOngoingTask()` reconstructs a `Task` and re-arms the UI ticker if `KEY_START_TIME != -1L`. This is how the timer survives app kill.
-- Two coroutine jobs: `timerJob` (ticks `_displaySeconds` every 1s) and `reminderJob` (polls every 10s — see comment about trading precision for battery).
-- Tags are split into two derived `StateFlow`s via `map{}.stateIn(SharingStarted.WhileSubscribed(5000))`:
-  - `displayTags` = `tag.showOnHome == true` — drives the `HorizontalPager` on `HomeScreen`.
-  - `otherTags` = the rest — selectable via the "其他" fallback page.
-- `HomeScreen` syncs pager position → `selectTag()` via `LaunchedEffect(displayTags, pagerState.currentPage)`. The pager has `pageCount = displayTags.size + 1` (the +1 is the "other" page).
-- UI events (e.g. `ShowSaveRecordDialog`) flow through a `Channel` → `receiveAsFlow()` rather than `SharedFlow`, so the consumer pattern in `HomeScreen` uses `collectLatest`. Keep this channel-based pattern when adding one-shot UI events.
-- `endTask()` does **not** save the record directly — it emits `UiEvent.ShowSaveRecordDialog` so the user can edit the description first. The dialog then calls `addRecord`.
+`BackHandler` at the top of `AppContent` ensures any non-TODAY tab back/swipe returns to TODAY:
+```kotlin
+BackHandler(enabled = currentScreen != Screen.TODAY || settingsSubpage != SettingsSubpage.ROOT) { ... }
+```
+This makes TODAY the "home" tab. Don't add per-screen BackHandlers without coordinating with this top-level one — Compose's nested priority means child handlers override.
 
-### Data layer
+Settings has 3 subpages (`ROOT` / `CATEGORIES` / `PROJECTS`) tracked by a separate `settingsSubpage` state.
 
-All repositories are constructed in `TimerViewModel` with `application` as the `Context` — **not** injected (no Hilt/Dagger in this project). Two storage strategies coexist:
+### Data layer (Room v2)
 
-| Repo | Storage | File/Key |
+All repositories are constructed in ViewModels with `application` as the `Context` — **not** injected (no Hilt/Dagger). 5 entities:
+
+| Entity | Table | Notes |
 |---|---|---|
-| `TimeRecordRepository` | JSON file | `filesDir/time_records.json` |
-| `HealthRecordRepository` | JSON file | `filesDir/health_records.json` |
-| `TagRepository` | SharedPreferences | `time_manager_tags` → `saved_tags` (JSON string) |
-| `DurationRepository` | SharedPreferences | `time_manager_durations` → `saved_durations` (JSON array) |
-| `TimerViewModel` (timer/reminder state) | SharedPreferences | `timer_prefs` (mixed scalar keys) |
+| `TimeEntryEntity` | `time_entries` | Core record: `date`, `startMinOfDay`, `durationMin`, `categoryId`, `projectId?`, `note?` |
+| `CategoryEntity` | `categories` | Two-level: `parentId == null` = 一级; `colorKey` lives on 一级 only; `isSystem` guards the undeletable "其他" |
+| `ProjectEntity` | `projects` | Optional statistical dimension |
+| `ReviewEntity` | `reviews` | DAY/WEEK/MONTH templates |
+| `AppSettingEntity` | `app_settings` | Key-value (PK = key string) |
 
-Repositories read the whole file/pref on every mutation (`getAllRecords().toMutableList()` then re-serialize). Acceptable at current scale; do not pre-optimize unless a perf issue is observed.
+`AppDatabase` is `version = 2` with **`fallbackToDestructiveMigration()`** (v1.1 one-time exception, user authorized for the seed-list revision). **Future schema changes must ship explicit `Migration` objects** — destructive is now closed.
+
+`DefaultDataSeeder` runs once on first launch (gated by `KEY_SEEDED` AppSetting). It seeds **5 一级 + 13 二级** categories:
+
+| 一级 | colorKey | 二级 |
+|---|---|---|
+| 工作 | blue | 实验 / 阅读 / 写论文 / 思考 |
+| 休息 | cyan | 放空 / 游戏 / 阅读 |
+| 自我实现 | orange | 规划 / 户外 / 室内 |
+| 无效消耗 | grey | 无效等待 / 被动阅读 |
+| 其他 (isSystem) | neutral | 待分类 |
+
+User edits to categories (rename / archive / add) **persist across app updates** because the seeder only runs once. Don't re-seed on every launch.
 
 ### Time model
 
-`Task` (data/Task.kt) is the in-memory representation while running; `TimeRecord` (data/TimeRecord.kt) is the persisted completed-task shape with `creationType` (default `"QUICK"`, also `"NORMAL"`). `isStopwatch` on `Task` gates whether `endTime` is computed — the stopwatch path is the live one; the fixed-duration path is legacy.
+`TimeEntryEntity` is the persisted record. `Task`/`TimeRecord` from the old v0 design are **deleted** — don't reintroduce. The `startMinOfDay` is **derived** (max end-of-day for the date, falling back to `day_start_min` AppSetting = 480 / 08:00), never input by the user. User input is only `category + duration`.
 
-### Notifications
+### Duration input
 
-`service/NotificationService` is a singleton `object`, not a bound service. `ReminderType` (WATER / STAND) is defined in `ui/components/` (referenced from both ViewModel and NotificationService). Two notification channels: timer completion and reminders. Notification debounce is done via `last_notify_${type}` prefs key (60s window) inside `TimerViewModel.checkAndNotify`, not in the notification service itself.
+`DurationInput.kt` exposes 3 chips: **30m / 60m / 自定义**. The custom chip opens `DurationPickerSheet` (a `ModalBottomSheet`) containing two `WheelPicker` components (hours 0–23 + minutes 0/5/.../55).
+
+`WheelPicker` is a hand-rolled Compose wheel using `LazyColumn` + `rememberSnapFlingBehavior` — M3 has no built-in. Don't swap for a text field; the previous text-field design had a state-coupling bug where typing "150" visually snapped to the "15m" chip.
+
+### Timeline drag-reorder
+
+`DayTimeline.kt` long-presses a block → drag → 5-min snap → cascade shift (overlapping downstream blocks pushed forward). Crossing 24:00 → reject + toast. The reorder operation is serialized via a Mutex inside `TodayLedgerViewModel` to avoid races. Don't remove the Mutex.
 
 ## Conventions specific to this codebase
 
-- **Language mix**: UI strings, comments, and notification copy are mostly **Simplified Chinese**; identifiers are English. Match the surrounding file's language when adding content.
+- **Language mix**: UI strings, comments, notification copy, and default category names are **Simplified Chinese**; identifiers are English. Match the surrounding file's language when adding content.
 - **No DI framework** — instantiate repositories directly in the ViewModel constructor with `application` as context.
-- **Compose UI lives in `ui/screens`** (top-level screens), **`ui/components`** (reusable composables like `StartButton`, `ThermometerReminder`, `ReminderButton`, `FinishTaskDialog`, `TagSelectionDialog`), and **`ui/activities`** (Activity shells).
-- **Long-press is the primary timer action**: `StartButton` uses `detectTapGestures` with a fill animation on long press to start. Don't change to single-tap without coordinating with the rest of the home flow.
-- The README has a "重大版本重构与实施规划" section with empty `step1/step2/...` checklists — this is a living planning doc, update it when scoping a major refactor.
+- **Compose UI lives in `ui/screens`** (top-level screens), **`ui/components`** (reusable composables: `HomeBottomBar`, `WheelPicker`, `DurationPickerSheet`, `DurationInput`, `CategoryPicker`, `CategoryBar`, `DayTimeline`, `TimelineBlock`, `CategoryColors`), and **`ui/activities`** (Activity shells).
+- **底栏始终可见**（v1.1 改动）— RECORD 屏现在也是普通 tab，不是模态；之前隐藏底栏的逻辑已删除。
+- **`CategoryColors.colorFor(key)` is `@Composable`** — it switches between light/dark palettes via `isSystemInDarkTheme()`. All 3 call sites are inside Composition. Don't call from non-Composable contexts.
 
 ## Where to look for what
 
-- Want to change home-screen behavior → `ui/screens/HomeScreen.kt` (pager, dialogs, reminder wiring).
-- Want to change what survives an app restart → `TimerViewModel` `companion object` keys + `checkOngoingTask()` / `startTask()` / `endTask()`.
-- Want a new tag field → `data/Tag.kt` + serialization in `TagRepository.kt` (both `getTags()` and `saveTags()`).
-- Want a new screen → add to `Screen` enum in `MainActivity.kt` and wire a `when` branch + `BackHandler`.
+- Change bottom bar / tab order → `MainActivity.kt` (`Screen` enum + `HomeBottomBar` invocation) and `ui/components/HomeBottomBar.kt`
+- Change back behavior → `MainActivity.kt` top-level `BackHandler`
+- Change default categories → `data/DefaultDataSeeder.kt` (and bump Room version + add Migration, don't use destructive again)
+- Change category colors → `ui/components/CategoryColors.kt` (lightPalette / darkPalette maps)
+- Change duration input → `ui/components/DurationInput.kt` + `DurationPickerSheet.kt` + `WheelPicker.kt`
+- Change timeline / drag-reorder → `ui/screens/TodayLedgerScreen.kt` + `ui/components/DayTimeline.kt` + `TodayLedgerViewModel`
+- Change stats aggregation → `viewmodel/StatsViewModel.kt` + `util/DateRange.kt`
+- Change export format → `util/CsvExporter.kt` + `viewmodel/SettingsViewModel.kt` (Markdown + JSON backup)
+
+The README has a "重大版本重构与实施规划" section reflecting v1 / v1.1 — update it when scoping future work.
+
+## Session docs
+
+- `docs/plan.md` — original 8-phase plan (Phase 0–8 all `[x]`)
+- `docs/gpt_plan.md` — product design blueprint (Lyubishchev method theory)
+- `docs/sessions/2026-06-20_phase1-7.md` — Phase 1–7 session log
+- `docs/sessions/2026-06-21_phase8.md` — Phase 8 session log
+- `docs/sessions/2026-06-21_v1.1.md` — v1.1 maintenance session log
+- `docs/v1.1-summary-2026-06-21.md` — v1.1 retrospective (this work)
+- `docs/v1.1-maintenance-2026-06-21.md` — v1.1 user-drafted plan (design rationale)
