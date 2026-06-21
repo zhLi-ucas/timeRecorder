@@ -18,8 +18,6 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -42,6 +40,8 @@ import com.example.timemanager.ui.screens.SettingsScreen
 import com.example.timemanager.ui.screens.SettingsSubpage
 import com.example.timemanager.ui.screens.StatsScreen
 import com.example.timemanager.ui.screens.TodayLedgerScreen
+import com.example.timemanager.ui.components.HomeBottomBar
+import com.example.timemanager.ui.components.NavItemData
 import com.example.timemanager.ui.theme.TimeManagerTheme
 import com.example.timemanager.viewmodel.RecordViewModel
 import com.example.timemanager.viewmodel.ReviewViewModel
@@ -67,10 +67,10 @@ class MainActivity : ComponentActivity() {
 }
 
 enum class Screen(val label: String, val icon: ImageVector) {
-    TODAY("今日账本", Icons.Filled.Home),
     RECORD("记一笔", Icons.Filled.Add),
-    STATS("统计", Icons.Filled.Assessment),
     REVIEW("复盘", Icons.Filled.AutoStories),
+    TODAY("今日账本", Icons.Filled.Home),
+    STATS("统计", Icons.Filled.Assessment),
     SETTINGS("设置", Icons.Filled.Settings),
 }
 
@@ -109,21 +109,31 @@ fun AppContent() {
         }
     }
 
-    val showBottomBar = currentScreen != Screen.RECORD
+    val showBottomBar = true
+
+    val navLeft = listOf(
+        NavItemData(Screen.RECORD.label, Screen.RECORD.icon, Screen.RECORD),
+        NavItemData(Screen.REVIEW.label, Screen.REVIEW.icon, Screen.REVIEW)
+    )
+    val navRight = listOf(
+        NavItemData(Screen.STATS.label, Screen.STATS.icon, Screen.STATS),
+        NavItemData(Screen.SETTINGS.label, Screen.SETTINGS.icon, Screen.SETTINGS)
+    )
+    val navCenter = NavItemData(Screen.TODAY.label, Screen.TODAY.icon, Screen.TODAY)
 
     Scaffold(
         bottomBar = {
             if (showBottomBar) {
-                NavigationBar {
-                    Screen.entries.forEach { screen ->
-                        NavigationBarItem(
-                            selected = screen == currentScreen,
-                            onClick = { currentScreen = screen },
-                            icon = { Icon(screen.icon, contentDescription = screen.label) },
-                            label = { Text(screen.label) }
-                        )
+                HomeBottomBar(
+                    leftItems = navLeft,
+                    rightItems = navRight,
+                    centerItem = navCenter,
+                    selectedKey = currentScreen,
+                    onItemClick = { item ->
+                        val target = item.key as? Screen ?: return@HomeBottomBar
+                        currentScreen = target
                     }
-                }
+                )
             }
         }
     ) { padding ->
