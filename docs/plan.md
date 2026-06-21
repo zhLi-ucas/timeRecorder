@@ -295,6 +295,14 @@ Screen.SETTINGS   设置（分类/项目管理 + 导出/备份）
 - Lint 通过、`./gradlew test` 通过
 - 更新 `README.md` 的"重大版本重构与实施规划"段落
 
+**v1 落地决策**：
+
+- 横屏改为**锁竖屏**（`screenOrientation=portrait`），不做横屏自适应
+- 启动图标替换为 Claude 生成的简单矢量图标（白圆 + 3 横条 on 蓝）+ Android 13+ monochrome themed icon
+- 暗色适配方案：`CategoryColors` 加 light/dark 双 palette（Material 200 tints），`@Composable colorFor()` 跟 `isSystemInDarkTheme()` 切换
+- Lint 修复方案：启用 core library desugaring（`desugar_jdk_libs:2.1.5`）让 `java.time` 在 minSdk 24 上可用，一次性消化 94 个 NewApi 错误
+- 清理 5 个 webp 前景（adaptive icon 现走 vector drawable）+ 7 个未引用 color（legacy purple/teal/black/white）
+
 ---
 
 ## 5. 明确不做的事（第一版）
@@ -374,5 +382,5 @@ Screen.SETTINGS   设置（分类/项目管理 + 导出/备份）
 [x] Phase 5  统计页
 [x] Phase 6  复盘页（日/周/月）
 [x] Phase 7  设置页（分类/项目/导出）
-[ ] Phase 8  打磨与回归
+[x] Phase 8  打磨与回归
 ```
