@@ -207,5 +207,6 @@ The README has a "重大版本重构与实施规划" section reflecting v1 / v1.
 - `docs/sessions/2026-06-20_phase1-7.md` — Phase 1–7 session log
 - `docs/sessions/2026-06-21_phase8.md` — Phase 8 session log
 - `docs/sessions/2026-06-21_v1.1.md` — v1.1 maintenance session log
+- `docs/sessions/2026-06-21_today-history.md` — TODAY 历史浏览与编辑 session log
 - `docs/v1.1-summary-2026-06-21.md` — v1.1 retrospective (this work)
 - `docs/v1.1-maintenance-2026-06-21.md` — v1.1 user-drafted plan (design rationale)
