@@ -3,6 +3,7 @@ package com.example.timemanager.ui.activities
 import android.app.Application
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
@@ -100,6 +101,13 @@ fun AppContent() {
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(app)
     )
     var settingsSubpage by rememberSaveable { mutableStateOf(SettingsSubpage.ROOT) }
+
+    BackHandler(enabled = currentScreen != Screen.TODAY || settingsSubpage != SettingsSubpage.ROOT) {
+        when {
+            settingsSubpage != SettingsSubpage.ROOT -> settingsSubpage = SettingsSubpage.ROOT
+            currentScreen != Screen.TODAY -> currentScreen = Screen.TODAY
+        }
+    }
 
     val showBottomBar = currentScreen != Screen.RECORD
 
