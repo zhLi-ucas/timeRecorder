@@ -36,9 +36,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.timemanager.data.entity.CategoryEntity
+import com.example.timemanager.ui.components.ColorSwatchDefaults
+import com.example.timemanager.ui.components.ColorSwatchPicker
 import com.example.timemanager.viewmodel.SettingsViewModel
-
-private val COLOR_KEYS = listOf("blue", "cyan", "green", "amber", "orange", "purple", "grey", "neutral")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -207,7 +207,7 @@ private fun AddFirstLevelDialog(
     onConfirm: (String, String) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
-    var color by remember { mutableStateOf(COLOR_KEYS.first()) }
+    var color by remember { mutableStateOf(ColorSwatchDefaults.KEYS.first()) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("新增一级分类") },
@@ -219,14 +219,10 @@ private fun AddFirstLevelDialog(
                     label = { Text("名称") },
                     singleLine = true
                 )
-                Text("配色：$color", style = MaterialTheme.typography.bodySmall)
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    COLOR_KEYS.forEach { k ->
-                        TextButton(onClick = { color = k }) {
-                            Text(k, style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                }
+                ColorSwatchPicker(
+                    selectedKey = color,
+                    onSelected = { color = it }
+                )
             }
         },
         confirmButton = {
@@ -271,7 +267,7 @@ private fun EditCategoryDialog(
     onConfirm: (String, String) -> Unit
 ) {
     var name by remember { mutableStateOf(category.name) }
-    var color by remember { mutableStateOf(category.colorKey ?: COLOR_KEYS.first()) }
+    var color by remember { mutableStateOf(category.colorKey ?: ColorSwatchDefaults.KEYS.first()) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("编辑分类") },
@@ -284,14 +280,10 @@ private fun EditCategoryDialog(
                     singleLine = true
                 )
                 if (category.parentId == null) {
-                    Text("配色：$color", style = MaterialTheme.typography.bodySmall)
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        COLOR_KEYS.forEach { k ->
-                            TextButton(onClick = { color = k }) {
-                                Text(k, style = MaterialTheme.typography.labelSmall)
-                            }
-                        }
-                    }
+                    ColorSwatchPicker(
+                        selectedKey = color,
+                        onSelected = { color = it }
+                    )
                 }
             }
         },
