@@ -29,7 +29,8 @@ fun TimelineBlock(
     modifier: Modifier = Modifier
 ) {
     val baseColor = CategoryColors.colorFor(item.parent?.colorKey)
-    val color = if (isDragging) baseColor.copy(alpha = 0.98f) else baseColor.copy(alpha = 0.88f)
+    val effAlpha = 0.5f + (item.entry.effectiveness.coerceIn(0, 100) / 100f) * 0.5f
+    val color = if (isDragging) baseColor.copy(alpha = 0.98f) else baseColor.copy(alpha = effAlpha)
     val dragLayer = if (isDragging) {
         Modifier.graphicsLayer {
             translationY = dragOffsetY

@@ -111,7 +111,7 @@ class TodayLedgerViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    fun insertDebugEntry() {
+    fun appendInterval() {
         viewModelScope.launch {
             reorderMutex.withLock {
                 val date = _selectedDate.value
@@ -120,16 +120,16 @@ class TodayLedgerViewModel(application: Application) : AndroidViewModel(applicat
                     ?.toIntOrNull() ?: 480
                 val maxEnd = entryDao.getMaxEndMinOfDay(date)
                 val start = if (maxEnd == 0) dayStart else maxEnd
-                val duration = 60
+                val duration = 10
                 if (start + duration > 1440) {
                     _uiEvent.send(TodayUiEvent.ShowToast("该日已排满"))
                     return@withLock
                 }
-
-                val categories = categoryDao.getAll().filter { it.parentId != null }
-                val cat = categories.randomOrNull()
-                    ?: return@withLock
-
+                val cat = categoryDao.getById("cat_rest_interval")
+                    ?: run {
+                        _uiEvent.send(TodayUiEvent.ShowToast("未找到「间隔」分类"))
+                        return@withLock
+                    }
                 val now = LocalDateTime.now()
                 entryDao.insert(
                     TimeEntryEntity(
@@ -137,8 +137,9 @@ class TodayLedgerViewModel(application: Application) : AndroidViewModel(applicat
                         date = date,
                         startMinOfDay = start,
                         durationMin = duration,
-                        title = "${cat.name}（调试）",
+                        title = "休息·间隔",
                         categoryId = cat.id,
+                        effectiveness = 80,
                         createdAt = now,
                         updatedAt = now
                     )
