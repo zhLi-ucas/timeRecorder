@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -24,9 +25,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.timemanager.ui.components.CategoryBar
 import com.example.timemanager.ui.components.CategoryColors
+import com.example.timemanager.util.DateRange
 import com.example.timemanager.util.formatDurationLong
 import com.example.timemanager.viewmodel.StatsRange
 import com.example.timemanager.viewmodel.StatsViewModel
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -35,8 +39,12 @@ fun StatsScreen(viewModel: StatsViewModel) {
     val range by viewModel.range.collectAsState()
     val expanded = remember { mutableStateMapOf<String, Boolean>() }
 
+    val today = remember { LocalDate.now() }
+    val (from, to) = remember(range) { DateRange.statsRange(range, today) }
+    val periodText = formatPeriod(range, from, to)
+
     Column(modifier = Modifier.fillMaxSize()) {
-        StatsHeader(totalMin = uiState.totalMin)
+        StatsHeader(totalMin = uiState.totalMin, periodText = periodText)
         HorizontalDivider()
         FlowRow(
             modifier = Modifier
@@ -87,17 +95,27 @@ fun StatsScreen(viewModel: StatsViewModel) {
 }
 
 @Composable
-private fun StatsHeader(totalMin: Long) {
-    Column(
+private fun StatsHeader(totalMin: Long, periodText: String) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top
     ) {
-        Text(text = "统计", style = MaterialTheme.typography.headlineSmall)
+        Column {
+            Text(text = "统计", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                text = "总记录 ${formatDurationLong(totalMin)}",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
         Text(
-            text = "总记录 ${formatDurationLong(totalMin)}",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary
+            text = periodText,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp)
         )
     }
 }
@@ -113,5 +131,32 @@ private fun EmptyStats() {
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+private fun formatPeriod(
+    range: StatsRange,
+    from: LocalDate,
+    to: LocalDate
+): String {
+    val sameYear = from.year == to.year
+    val thisYear = LocalDate.now().year
+    val showYear = !sameYear || from.year != thisYear
+
+    val yearFmt = DateTimeFormatter.ofPattern("yy-MM-dd")
+    val mdFmt = DateTimeFormatter.ofPattern("MM-dd")
+
+    return when (range) {
+        StatsRange.TODAY ->
+            if (showYear) from.format(yearFmt) else from.format(mdFmt)
+        StatsRange.WEEK -> {
+            val f = if (showYear) from.format(yearFmt) else from.format(mdFmt)
+            val t = if (showYear || from.year != to.year) to.format(yearFmt) else to.format(mdFmt)
+            "$f ~ $t"
+        }
+        StatsRange.MONTH ->
+            if (showYear) from.format(DateTimeFormatter.ofPattern("yyyy-MM"))
+            else from.format(DateTimeFormatter.ofPattern("MM"))
+        StatsRange.YEAR -> from.year.toString()
     }
 }

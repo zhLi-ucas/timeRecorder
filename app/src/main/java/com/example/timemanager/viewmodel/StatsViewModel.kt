@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.timemanager.data.db.AppDatabase
 import com.example.timemanager.data.entity.CategoryEntity
 import com.example.timemanager.data.entity.TimeEntryEntity
+import com.example.timemanager.util.DateRange
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -14,7 +15,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
-import java.time.DayOfWeek
 import java.time.LocalDate
 
 enum class StatsRange(val label: String) {
@@ -42,7 +42,7 @@ class StatsViewModel(application: Application) : AndroidViewModel(application) {
     private val entryDao = db.timeEntryDao()
     private val categoryDao = db.categoryDao()
 
-    private val _range = MutableStateFlow(StatsRange.MONTH)
+    private val _range = MutableStateFlow(StatsRange.WEEK)
     val range: StateFlow<StatsRange> = _range.asStateFlow()
 
     private val categoriesFlow = categoryDao.observeAll()
@@ -50,7 +50,7 @@ class StatsViewModel(application: Application) : AndroidViewModel(application) {
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<StatsUiState> = _range
         .flatMapLatest { range ->
-            val (from, to) = rangeToDates(range, LocalDate.now())
+            val (from, to) = DateRange.statsRange(range, LocalDate.now())
             combine(entryDao.observeByDateRange(from, to), categoriesFlow) { entries, cats ->
                 computeStats(entries, cats)
             }
@@ -60,19 +60,6 @@ class StatsViewModel(application: Application) : AndroidViewModel(application) {
     fun setRange(r: StatsRange) {
         _range.value = r
     }
-
-    private fun rangeToDates(range: StatsRange, today: LocalDate): Pair<LocalDate, LocalDate> =
-        when (range) {
-            StatsRange.TODAY -> today to today
-            StatsRange.WEEK -> {
-                val monday = today.with(DayOfWeek.MONDAY)
-                monday to monday.plusDays(6)
-            }
-            StatsRange.MONTH -> today.withDayOfMonth(1) to
-                today.withDayOfMonth(today.lengthOfMonth())
-            StatsRange.YEAR -> LocalDate.of(today.year, 1, 1) to
-                LocalDate.of(today.year, 12, 31)
-        }
 
     private fun computeStats(
         entries: List<TimeEntryEntity>,
