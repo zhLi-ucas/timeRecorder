@@ -22,7 +22,9 @@ class TimeManagerApplication : Application(), ViewModelStoreOwner {
         super.onCreate()
         val db = AppDatabase.getInstance(this)
         appScope.launch {
-            DefaultDataSeeder(db).seedIfNeeded()
+            val seeder = DefaultDataSeeder(db)
+            seeder.seedIfNeeded()
+            seeder.seedV1_2IfNeeded()
         }
     }
 }

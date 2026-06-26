@@ -16,7 +16,7 @@ object CsvExporter {
         projById: Map<String, ProjectEntity>
     ): String {
         val sb = StringBuilder()
-        sb.append("date,start_time,end_time,duration_minutes,title,category,subcategory,project,description\n")
+        sb.append("date,start_time,end_time,duration_minutes,title,category,subcategory,project,description,effectiveness\n")
         entries.sortedWith(compareBy({ it.date }, { it.startMinOfDay })).forEach { e ->
             val cat = catById[e.categoryId]
             val parent = cat?.parentId?.let { catById[it] }
@@ -29,7 +29,8 @@ object CsvExporter {
             sb.append(escape(parent?.name ?: "")).append(',')
             sb.append(escape(cat?.name ?: "")).append(',')
             sb.append(escape(proj?.name ?: "")).append(',')
-            sb.append(escape(e.note ?: ""))
+            sb.append(escape(e.note ?: "")).append(',')
+            sb.append(e.effectiveness)
             sb.append('\n')
         }
         return sb.toString()
@@ -43,8 +44,8 @@ object CsvExporter {
         val sb = StringBuilder()
         sb.append("# TimeManager 导出 ${LocalDate.now().format(dateFmt)}\n\n")
         sb.append("## 时间记录\n\n")
-        sb.append("| 日期 | 时间 | 时长 | 一级 | 二级 | 标题 | 项目 | 备注 |\n")
-        sb.append("|---|---|---:|---|---|---|---|---|\n")
+        sb.append("| 日期 | 时间 | 时长 | 一级 | 二级 | 标题 | 项目 | 备注 | 有效度 |\n")
+        sb.append("|---|---|---:|---|---|---|---|---|---:|\n")
         entries.sortedWith(compareBy({ it.date }, { it.startMinOfDay })).forEach { e ->
             val cat = catById[e.categoryId]
             val parent = cat?.parentId?.let { catById[it] }
@@ -57,6 +58,7 @@ object CsvExporter {
                 .append(" | ").append(escapeMd(e.title))
                 .append(" | ").append(escapeMd(proj?.name ?: ""))
                 .append(" | ").append(escapeMd(e.note ?: ""))
+                .append(" | ").append(e.effectiveness).append("%")
                 .append(" |\n")
         }
         return sb.toString()

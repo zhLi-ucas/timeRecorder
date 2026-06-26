@@ -96,7 +96,7 @@ class TimeEntryDaoTest {
         assertTrue(first[4].isSystem)
 
         val secondOfWork = db.categoryDao().getSecondLevel("cat_work")
-        assertEquals(4, secondOfWork.size)
+        assertEquals(5, secondOfWork.size)
         assertEquals("实验", secondOfWork[0].name)
 
         assertEquals("true", db.appSettingDao().getByKey("seeded"))

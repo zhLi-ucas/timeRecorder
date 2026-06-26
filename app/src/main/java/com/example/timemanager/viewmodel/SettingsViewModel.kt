@@ -238,6 +238,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             o.put("projectId", e.projectId ?: JSONObject.NULL)
             o.put("note", e.note ?: JSONObject.NULL)
             o.put("isEstimated", e.isEstimated)
+            o.put("effectiveness", e.effectiveness)
             entries.put(o)
         }
         root.put("timeEntries", entries)
@@ -323,6 +324,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                         projectId = if (o.isNull("projectId")) null else o.getString("projectId"),
                         note = if (o.isNull("note")) null else o.getString("note"),
                         isEstimated = o.optBoolean("isEstimated", false),
+                        effectiveness = o.optInt("effectiveness", 80),
                         createdAt = now,
                         updatedAt = now
                     )

@@ -15,6 +15,7 @@ data class TimeEntryEntity(
     val projectId: String? = null,
     val note: String? = null,
     val isEstimated: Boolean = false,
+    val effectiveness: Int = 80,
     val createdAt: LocalDateTime,
     val updatedAt: LocalDateTime
 )

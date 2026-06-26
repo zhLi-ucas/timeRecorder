@@ -5,6 +5,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.timemanager.data.converter.Converters
 import com.example.timemanager.data.dao.AppSettingDao
 import com.example.timemanager.data.dao.CategoryDao
@@ -25,7 +27,7 @@ import com.example.timemanager.data.entity.TimeEntryEntity
         ReviewEntity::class,
         AppSettingEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -47,8 +49,20 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "timemanager.db"
                 )
-                    .fallbackToDestructiveMigration()
+                    .addMigrations(MIGRATION_2_3)
                     .build().also { INSTANCE = it }
             }
+
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE time_entries ADD COLUMN effectiveness INTEGER NOT NULL DEFAULT 80"
+                )
+                db.execSQL(
+                    """UPDATE time_entries SET effectiveness = 20
+                       WHERE categoryId IN (SELECT id FROM categories WHERE parentId = 'cat_invalid')"""
+                )
+            }
+        }
     }
 }
