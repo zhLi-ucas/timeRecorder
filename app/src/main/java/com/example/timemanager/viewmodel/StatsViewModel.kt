@@ -66,17 +66,33 @@ class StatsViewModel(application: Application) : AndroidViewModel(application) {
         cats: List<CategoryEntity>
     ): StatsUiState {
         val byId = cats.associateBy { it.id }
+        val INVALID_PARENT_ID = "cat_invalid"
+        val OTHER_PARENT_ID = "cat_other"
+
         val firstTotals = mutableMapOf<String, Long>()
-        val secondTotals = mutableMapOf<String, Long>()
         entries.forEach { e ->
-            val cur = secondTotals[e.categoryId] ?: 0L
-            secondTotals[e.categoryId] = cur + e.durationMin
-            val parentId = byId[e.categoryId]?.parentId
-            if (parentId != null) {
-                firstTotals[parentId] = (firstTotals[parentId] ?: 0L) + e.durationMin
+            val cat = byId[e.categoryId] ?: return@forEach
+            val parent = cat.parentId ?: return@forEach
+            val eff = e.effectiveness.coerceIn(0, 100) / 100f
+            val dur = e.durationMin.toLong()
+            val invalid = (dur * (1f - eff)).toLong()
+            val valid = dur - invalid
+
+            if (parent == INVALID_PARENT_ID) {
+                firstTotals[INVALID_PARENT_ID] = (firstTotals[INVALID_PARENT_ID] ?: 0L) + invalid
+                firstTotals[OTHER_PARENT_ID]   = (firstTotals[OTHER_PARENT_ID] ?: 0L) + valid
+            } else {
+                firstTotals[parent]            = (firstTotals[parent] ?: 0L) + valid
+                firstTotals[INVALID_PARENT_ID] = (firstTotals[INVALID_PARENT_ID] ?: 0L) + invalid
             }
         }
-        val total = entries.sumOf { it.durationMin.toLong() }
+
+        val secondTotals = mutableMapOf<String, Long>()
+        entries.forEach { e ->
+            secondTotals[e.categoryId] = (secondTotals[e.categoryId] ?: 0L) + e.durationMin
+        }
+
+        val total = firstTotals.values.sum()
         val maxFirst = firstTotals.values.maxOrNull() ?: 0L
         val groups = cats.asSequence()
             .filter { it.parentId == null && !it.isArchived }
