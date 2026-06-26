@@ -27,8 +27,8 @@ data class RecordFormState(
     val parentCategoryId: String? = null,
     val categoryId: String? = null,
     val projectId: String? = null,
-    val durationMin: Int = 60,
-    val title: String = "",
+    val durationMin: Int = 30,
+    val effectiveness: Int = 80,
     val note: String = "",
     val originalStartMinOfDay: Int = 0,
     val originalCreatedAt: LocalDateTime? = null
@@ -82,7 +82,7 @@ class RecordViewModel(application: Application) : AndroidViewModel(application) 
                 categoryId = e.categoryId,
                 projectId = e.projectId,
                 durationMin = e.durationMin,
-                title = e.title,
+                effectiveness = e.effectiveness,
                 note = e.note ?: "",
                 originalStartMinOfDay = e.startMinOfDay,
                 originalCreatedAt = e.createdAt
@@ -95,7 +95,7 @@ class RecordViewModel(application: Application) : AndroidViewModel(application) 
     fun selectCategory(id: String) = update { it.copy(categoryId = id) }
     fun selectProject(id: String?) = update { it.copy(projectId = id) }
     fun setDuration(min: Int)      = update { it.copy(durationMin = min.coerceIn(1, 1440)) }
-    fun setTitle(t: String)        = update { it.copy(title = t) }
+    fun setEffectiveness(p: Int)   = update { it.copy(effectiveness = p.coerceIn(0, 100)) }
     fun setNote(n: String)         = update { it.copy(note = n) }
 
     fun save() {
@@ -120,9 +120,11 @@ class RecordViewModel(application: Application) : AndroidViewModel(application) 
                     _uiEvent.send(RecordUiEvent.Toast("该日已排满，无法添加"))
                     return@withLock
                 }
-                val title = state.title.ifBlank {
-                    categories.value.find { it.id == catId }?.name ?: "未命名"
-                }
+                val cat = categories.value.find { it.id == catId }
+                val parent = cat?.parentId?.let { pid -> categories.value.find { it.id == pid } }
+                val title = listOfNotNull(parent?.name, cat?.name)
+                    .joinToString("·")
+                    .ifBlank { "未命名" }
                 val now = LocalDateTime.now()
                 entryDao.insert(
                     TimeEntryEntity(
@@ -134,6 +136,7 @@ class RecordViewModel(application: Application) : AndroidViewModel(application) 
                         categoryId = catId,
                         projectId = state.projectId,
                         note = state.note.ifBlank { null },
+                        effectiveness = state.effectiveness,
                         createdAt = state.originalCreatedAt ?: now,
                         updatedAt = now
                     )
