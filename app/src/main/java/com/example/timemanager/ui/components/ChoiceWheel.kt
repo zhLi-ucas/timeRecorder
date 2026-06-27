@@ -1,6 +1,7 @@
 package com.example.timemanager.ui.components
 
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.foundation.gestures.FlingBehavior
+import androidx.compose.foundation.gestures.ScrollScope
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -9,7 +10,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,6 +27,25 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 @Composable
+private fun rememberNoFlingSnapBehavior(
+    state: LazyListState,
+    itemCount: Int
+): FlingBehavior = remember(state, itemCount) {
+    object : FlingBehavior {
+        override suspend fun ScrollScope.performFling(initialVelocity: Float): Float {
+            val info = state.layoutInfo
+            val first = info.visibleItemsInfo.firstOrNull() ?: return 0f
+            val itemWidth = first.size
+            val advance = if (-first.offset > itemWidth / 2) 1 else 0
+            val targetIndex = (state.firstVisibleItemIndex + advance)
+                .coerceIn(0, (itemCount - 1).coerceAtLeast(0))
+            state.animateScrollToItem(targetIndex)
+            return 0f
+        }
+    }
+}
+
+@Composable
 fun <T> ChoiceWheel(
     items: List<T>,
     selectedIndex: Int,
@@ -38,7 +57,7 @@ fun <T> ChoiceWheel(
     unselectedColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
 ) {
     val listState = remember(items.firstOrNull()) { LazyListState() }
-    val snapBehavior = rememberSnapFlingBehavior(lazyListState = listState)
+    val snapBehavior = rememberNoFlingSnapBehavior(listState, items.size)
 
     LaunchedEffect(items.size, selectedIndex) {
         if (selectedIndex in items.indices) {
