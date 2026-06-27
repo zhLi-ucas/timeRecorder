@@ -42,7 +42,17 @@
 - [x] §5 分类调色板可视化 — ColorSwatchPicker 色块网格替换 8 个文字按钮
 - [x] 配套 — Launcher icon 美术 / 亮暗 palette 翻转 / TimelineBlock 文字色自适应 / effectiveness-weighted 统计聚合
 
-**v1.3 候选**：API key 加密（EncryptedSharedPreferences）/ Release signing + ProGuard keep / ChoiceWheel 左边界 snap 真修复 / AI 响应 JSON retry / 备注字段 IME 动画优化。
+**v1.3（2026-06-27）**：2 大诉求 + 3 次 STATS 滑动 bug 修复（详见 `docs/v1.3-plan-2026-06-27.md` 与 `docs/v1.3-summary-2026-06-27.md`）：
+
+- [x] §1 STATS 屏加左右滑动浏览历史 — Dense Pager（`pageCount = anchors.size`，空时段直接跳过）+ anchor 记忆（entry 增删不被动跳页）+ 下方追加 read-only「本X复盘」显示区（YEAR 时整段隐藏）
+- [x] §1 配套 — REVIEW 屏加日期选择器（解决 STATS 看到「去 REVIEW tab 写」却无法选历史时段的痛点）
+- [x] §1 bug 修复 — 滑动方向反 / `settledPage` 替代 `currentPage` 止动画争用 / `LaunchedEffect(key)` 替代 `snapshotFlow { StateFlow.value }`（后者不跟踪 StateFlow）
+- [x] §2 AI prompt 可编辑 + `{period}` 占位符 + `JSON_FORMAT_SUFFIX` 始终追加
+- [x] §2 复盘上下文窗口数字配置（DAY 1–14 / WEEK 1–7）+ MONTH 复盘对话框勾选本周涉及周报
+- [x] §2 预览功能两处入口（Settings + REVIEW）— PreviewDialog 滚动展示完整 system + user JSON + 「复制全部」
+- [x] §2 snapshot 重构 — 移除 previous entries snapshot，只发当前周期 entries + `recentReviews: List<ReviewEntity>`
+
+**v1.4 候选**：API key 加密（EncryptedSharedPreferences）/ Release signing + ProGuard keep / `fetchRecentReviews` 抽 helper 去重（Settings + Review VM 现有 ~25 行重复）/ MONTH dialog 显示每周 summaryText 预览 / STATS anchor 被删空时跳到相邻而非最新。
 
 ## 分类持久化行为
 
