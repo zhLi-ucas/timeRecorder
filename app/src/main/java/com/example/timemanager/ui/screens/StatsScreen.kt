@@ -81,7 +81,10 @@ fun StatsScreen(viewModel: StatsViewModel) {
             )
 
             LaunchedEffect(pagerState) {
-                snapshotFlow { pagerState.currentPage }
+                // 用 settledPage 而非 currentPage：动画过程中 currentPage 会发射中间页，
+                // 会与下面的 animateScrollToPage 形成争用，把 selectedIdx 改成中间值导致
+                // pager 卡在 initialPage 渲染空白。settledPage 只在动画停止后变化。
+                snapshotFlow { pagerState.settledPage }
                     .distinctUntilChanged()
                     .collect { page ->
                         if (page != viewModel.selectedIdx.value) viewModel.selectPage(page)
@@ -92,7 +95,7 @@ fun StatsScreen(viewModel: StatsViewModel) {
                     .distinctUntilChanged()
                     .collect { idx ->
                         val size = viewModel.validAnchors.value.size
-                        if (idx in 0 until size && pagerState.currentPage != idx) {
+                        if (idx in 0 until size && pagerState.settledPage != idx) {
                             pagerState.animateScrollToPage(idx)
                         }
                     }
