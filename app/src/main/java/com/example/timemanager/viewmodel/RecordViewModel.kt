@@ -74,7 +74,7 @@ class RecordViewModel(application: Application) : AndroidViewModel(application) 
     fun loadForEdit(entryId: String) {
         viewModelScope.launch {
             val e = entryDao.getByIdOnce(entryId) ?: return@launch
-            val cat = categories.value.find { it.id == e.categoryId }
+            val cat = categoryDao.getById(e.categoryId)
             _form.value = RecordFormState(
                 editingId = e.id,
                 date = e.date,

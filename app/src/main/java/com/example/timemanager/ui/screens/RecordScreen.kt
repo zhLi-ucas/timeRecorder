@@ -88,6 +88,12 @@ fun RecordScreen(
         }
     }
 
+    LaunchedEffect(visibleChildren, form.categoryId) {
+        if (visibleChildren.isNotEmpty() && visibleChildren.none { it.id == form.categoryId }) {
+            viewModel.selectCategory(visibleChildren[0].id)
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -116,7 +122,9 @@ fun RecordScreen(
                 onSelectedChange = { i -> viewModel.selectParent(parents[i].id) },
                 label = { it.name },
                 headerLabel = "一级分类",
-                selectedColor = parents.getOrNull(0)?.colorKey?.let {
+                selectedColor = parents.getOrNull(
+                    parents.indexOfFirst { it.id == form.parentCategoryId }.coerceAtLeast(0)
+                )?.colorKey?.let {
                     CategoryColors.colorFor(it)
                 } ?: MaterialTheme.colorScheme.primary
             )
@@ -124,9 +132,6 @@ fun RecordScreen(
             if (visibleChildren.isNotEmpty()) {
                 val selectedIdx = visibleChildren.indexOfFirst { it.id == form.categoryId }
                 val safeIdx = if (selectedIdx < 0) 0 else selectedIdx
-                if (selectedIdx < 0) {
-                    viewModel.selectCategory(visibleChildren[0].id)
-                }
                 ChoiceWheel(
                     items = visibleChildren,
                     selectedIndex = safeIdx,
