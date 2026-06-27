@@ -53,4 +53,7 @@ interface TimeEntryDao {
         """
     )
     suspend fun sumDurationByCategory(from: LocalDate, to: LocalDate): List<CategoryDurationRow>
+
+    @Query("SELECT DISTINCT date FROM time_entries ORDER BY date DESC")
+    fun observeAllDates(): Flow<List<LocalDate>>
 }

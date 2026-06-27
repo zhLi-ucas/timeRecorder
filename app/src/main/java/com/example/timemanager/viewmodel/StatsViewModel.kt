@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.timemanager.data.db.AppDatabase
 import com.example.timemanager.data.entity.CategoryEntity
+import com.example.timemanager.data.entity.ReviewEntity
 import com.example.timemanager.data.entity.TimeEntryEntity
 import com.example.timemanager.util.DateRange
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -14,7 +15,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import java.time.DayOfWeek
 import java.time.LocalDate
 
 enum class StatsRange(val label: String) {
@@ -41,24 +46,98 @@ class StatsViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getInstance(application)
     private val entryDao = db.timeEntryDao()
     private val categoryDao = db.categoryDao()
+    private val reviewDao = db.reviewDao()
 
     private val _range = MutableStateFlow(StatsRange.WEEK)
     val range: StateFlow<StatsRange> = _range.asStateFlow()
 
+    private val _selectedIdx = MutableStateFlow(0)
+    val selectedIdx: StateFlow<Int> = _selectedIdx.asStateFlow()
+
+    // anchor 记忆：用户主动选择的 anchor；entry 增删导致 validAnchors 列表变化时，
+    // 用此值重算 idx，而不是按下标 → 避免被动跳页
+    private val _userAnchor = MutableStateFlow<LocalDate?>(null)
+
     private val categoriesFlow = categoryDao.observeAll()
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val uiState: StateFlow<StatsUiState> = _range
+    val validAnchors: StateFlow<List<LocalDate>> = _range
         .flatMapLatest { range ->
-            val (from, to) = DateRange.statsRange(range, LocalDate.now())
+            entryDao.observeAllDates().map { dates ->
+                dates.map { anchorForRange(range, it) }.distinct().sortedDescending()
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val anchorDate: StateFlow<LocalDate> = combine(validAnchors, _selectedIdx) { anchors, idx ->
+        anchors.getOrNull(idx) ?: LocalDate.now()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LocalDate.now())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val uiState: StateFlow<StatsUiState> = combine(_range, anchorDate) { range, anchor -> range to anchor }
+        .flatMapLatest { (range, anchor) ->
+            val (from, to) = DateRange.statsRange(range, anchor)
             combine(entryDao.observeByDateRange(from, to), categoriesFlow) { entries, cats ->
                 computeStats(entries, cats)
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), StatsUiState())
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val currentReview: StateFlow<ReviewEntity?> = combine(_range, anchorDate) { range, anchor -> range to anchor }
+        .flatMapLatest { (range, anchor) ->
+            val type = when (range) {
+                StatsRange.TODAY -> ReviewPeriod.DAY
+                StatsRange.WEEK -> ReviewPeriod.WEEK
+                StatsRange.MONTH -> ReviewPeriod.MONTH
+                StatsRange.YEAR -> return@flatMapLatest flowOf<ReviewEntity?>(null)
+            }
+            val (start, end) = DateRange.currentFor(type, anchor)
+            reviewDao.observeByPeriod(type.name, start, end)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    init {
+        viewModelScope.launch {
+            validAnchors.collect { anchors ->
+                if (anchors.isEmpty()) return@collect
+                val target = _userAnchor.value
+                val newIdx = when {
+                    target == null -> 0
+                    anchors.contains(target) -> anchors.indexOf(target)
+                    else -> 0
+                }
+                if (_selectedIdx.value != newIdx) _selectedIdx.value = newIdx
+                _userAnchor.value = anchors[newIdx]
+            }
+        }
+    }
+
+    fun selectPage(idx: Int) {
+        val anchors = validAnchors.value
+        if (idx !in anchors.indices) return
+        _selectedIdx.value = idx
+        _userAnchor.value = anchors[idx]
+    }
+
+    fun shift(delta: Int) {
+        val size = validAnchors.value.size
+        if (size == 0) return
+        val newIdx = (_selectedIdx.value + delta).coerceIn(0, size - 1)
+        selectPage(newIdx)
+    }
+
     fun setRange(r: StatsRange) {
+        if (_range.value == r) return
         _range.value = r
+        _userAnchor.value = null
+    }
+
+    private fun anchorForRange(range: StatsRange, date: LocalDate): LocalDate = when (range) {
+        StatsRange.TODAY -> date
+        StatsRange.WEEK -> date.with(DayOfWeek.MONDAY)
+        StatsRange.MONTH -> date.withDayOfMonth(1)
+        StatsRange.YEAR -> LocalDate.of(date.year, 1, 1)
     }
 
     private fun computeStats(

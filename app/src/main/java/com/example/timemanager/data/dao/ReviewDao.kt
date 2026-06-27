@@ -27,6 +27,9 @@ interface ReviewDao {
     @Query("SELECT * FROM reviews WHERE periodType = :type AND periodStart = :start AND periodEnd = :end LIMIT 1")
     suspend fun getByPeriod(type: String, start: LocalDate, end: LocalDate): ReviewEntity?
 
+    @Query("SELECT * FROM reviews WHERE periodType = :type AND periodStart = :start AND periodEnd = :end LIMIT 1")
+    fun observeByPeriod(type: String, start: LocalDate, end: LocalDate): Flow<ReviewEntity?>
+
     @Query("SELECT * FROM reviews WHERE periodType = :type ORDER BY createdAt DESC")
     fun observeByType(type: String): Flow<List<ReviewEntity>>
 
