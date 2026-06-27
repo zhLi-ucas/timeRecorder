@@ -82,6 +82,12 @@ fun RecordScreen(
         children.filter { it.parentId == pid }
     } ?: emptyList()
 
+    LaunchedEffect(parents) {
+        if (parents.isNotEmpty() && form.parentCategoryId == null) {
+            viewModel.selectParent(parents[0].id)
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
