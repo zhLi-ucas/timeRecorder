@@ -80,25 +80,19 @@ fun StatsScreen(viewModel: StatsViewModel) {
                 pageCount = { anchors.size }
             )
 
+            // pager → VM：用户滑动 settledPage 变化时同步 VM
             LaunchedEffect(pagerState) {
-                // 用 settledPage 而非 currentPage：动画过程中 currentPage 会发射中间页，
-                // 会与下面的 animateScrollToPage 形成争用，把 selectedIdx 改成中间值导致
-                // pager 卡在 initialPage 渲染空白。settledPage 只在动画停止后变化。
                 snapshotFlow { pagerState.settledPage }
                     .distinctUntilChanged()
-                    .collect { page ->
-                        if (page != viewModel.selectedIdx.value) viewModel.selectPage(page)
-                    }
+                    .collect { page -> viewModel.selectPage(page) }
             }
-            LaunchedEffect(viewModel) {
-                snapshotFlow { viewModel.selectedIdx.value }
-                    .distinctUntilChanged()
-                    .collect { idx ->
-                        val size = viewModel.validAnchors.value.size
-                        if (idx in 0 until size && pagerState.settledPage != idx) {
-                            pagerState.animateScrollToPage(idx)
-                        }
-                    }
+            // VM → pager：selectedIdx 或 anchors 变化时（如 init 修正、range 切换、entry 增删）
+            // 直接调用 animateScrollToPage。用 LaunchedEffect(key) 而非 snapshotFlow { StateFlow.value }——
+            // 后者不保证跟踪 StateFlow 变化（snapshotFlow 只跟踪 Compose Snapshot state）。
+            LaunchedEffect(selectedIdx, anchors.size) {
+                if (selectedIdx in 0 until anchors.size && pagerState.settledPage != selectedIdx) {
+                    pagerState.animateScrollToPage(selectedIdx)
+                }
             }
 
             HorizontalPager(
