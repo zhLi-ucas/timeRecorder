@@ -55,6 +55,17 @@ data class MonthWeekOption(
     val selected: Boolean
 )
 
+/**
+ * 生成前的预览快照——保留用户在 PreviewDialog 里看到的内容对应的参数，
+ * 确认后 proceedAiCall 用同一组参数，"所见即所传"。
+ */
+data class PendingPreviewData(
+    val period: ReviewPeriod,
+    val anchor: LocalDate,
+    val selectedMondays: List<LocalDate>?,
+    val previewText: String
+)
+
 class ReviewViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getInstance(application)
     private val reviewDao = db.reviewDao()
@@ -77,11 +88,8 @@ class ReviewViewModel(application: Application) : AndroidViewModel(application) 
     private val _monthPicker = MutableStateFlow<List<MonthWeekOption>?>(null)
     val monthPicker: StateFlow<List<MonthWeekOption>?> = _monthPicker.asStateFlow()
 
-    private val _previewText = MutableStateFlow<String?>(null)
-    val previewText: StateFlow<String?> = _previewText.asStateFlow()
-
-    private val _previewLoading = MutableStateFlow(false)
-    val previewLoading: StateFlow<Boolean> = _previewLoading.asStateFlow()
+    private val _pendingPreview = MutableStateFlow<PendingPreviewData?>(null)
+    val pendingPreview: StateFlow<PendingPreviewData?> = _pendingPreview.asStateFlow()
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val history: StateFlow<List<ReviewEntity>> = _periodType
@@ -177,13 +185,14 @@ class ReviewViewModel(application: Application) : AndroidViewModel(application) 
 
     fun generateWithAi() {
         if (_aiState.value is AiState.Loading) return
+        if (_pendingPreview.value != null) return    // 已在预览确认阶段
         val period = _periodType.value
-        val today = LocalDate.now()
+        val anchor = _form.value.periodStart
 
         if (period == ReviewPeriod.MONTH) {
-            // MONTH 走 dialog 让用户勾选本周别周报
+            // MONTH 走 dialog 让用户勾选本周别周报，选完后再走预览
             viewModelScope.launch {
-                val options = buildMonthWeekOptions(today)
+                val options = buildMonthWeekOptions(anchor)
                 if (options.none { it.review != null }) {
                     _aiState.value = AiState.Error("本月没有任何周复盘，请先在 REVIEW tab 写至少一周")
                     return@launch
@@ -192,7 +201,8 @@ class ReviewViewModel(application: Application) : AndroidViewModel(application) 
             }
             return
         }
-        proceedAiCall(period, today, selectedMondays = null)
+        // DAY/WEEK：直接走预览中转，用户在 dialog 确认后才真正发请求
+        buildAndShowPendingPreview(period, anchor, selectedMondays = null)
     }
 
     fun setMonthWeekSelected(monday: LocalDate, selected: Boolean) {
@@ -224,7 +234,31 @@ class ReviewViewModel(application: Application) : AndroidViewModel(application) 
             _aiState.value = AiState.Error("未勾选任何周复盘")
             return
         }
-        proceedAiCall(ReviewPeriod.MONTH, LocalDate.now(), selected)
+        val period = _periodType.value
+        val anchor = _form.value.periodStart
+        // 选完周后再走预览中转，让用户确认实际选了哪些
+        buildAndShowPendingPreview(period, anchor, selected)
+    }
+
+    private fun buildAndShowPendingPreview(
+        period: ReviewPeriod,
+        anchor: LocalDate,
+        selectedMondays: List<LocalDate>?
+    ) {
+        viewModelScope.launch {
+            val previewText = buildPreviewString(period, anchor, selectedMondays)
+            _pendingPreview.value = PendingPreviewData(period, anchor, selectedMondays, previewText)
+        }
+    }
+
+    fun confirmGenerate() {
+        val pending = _pendingPreview.value ?: return
+        _pendingPreview.value = null
+        proceedAiCall(pending.period, pending.anchor, pending.selectedMondays)
+    }
+
+    fun cancelPendingPreview() {
+        _pendingPreview.value = null
     }
 
     private fun proceedAiCall(
@@ -291,7 +325,11 @@ class ReviewViewModel(application: Application) : AndroidViewModel(application) 
      * 预览：不发请求，构造完整的 system + user JSON 文本。
      * Settings 子页用当前真实数据（今天，若空则最近有数据日）。
      */
-    suspend fun buildPreviewString(period: ReviewPeriod, anchor: LocalDate): String {
+    suspend fun buildPreviewString(
+        period: ReviewPeriod,
+        anchor: LocalDate,
+        selectedMondays: List<LocalDate>? = null
+    ): String {
         val model = settingDao.getByKey(DefaultDataSeeder.KEY_DEEPSEEK_MODEL)
             ?.ifBlank { null }
             ?: DefaultDataSeeder.DEFAULT_DEEPSEEK_MODEL
@@ -303,7 +341,7 @@ class ReviewViewModel(application: Application) : AndroidViewModel(application) 
         val entries = entryDao.getByDateRange(currentRange.first, currentRange.second)
         val categories = categoryDao.getAll()
         val dayStart = settingDao.getByKey(DefaultDataSeeder.KEY_DAY_START_MIN)?.toIntOrNull() ?: 480
-        val recentReviews = fetchRecentReviews(period, anchor, selectedMondays = null)
+        val recentReviews = fetchRecentReviews(period, anchor, selectedMondays)
 
         val periodWord = when (period) {
             ReviewPeriod.DAY -> "日"
@@ -317,25 +355,9 @@ class ReviewViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * REVIEW 屏预览入口：用当前 period + form 的 periodStart 作为 anchor，
-     * 调用 buildPreviewString 并写到 _previewText 供 UI 弹 dialog。
+     * REVIEW 屏不再有独立预览按钮——预览已并入 generateWithAi 流程作为二次确认。
+     * Settings 子页用自己的 SettingsViewModel.requestPreview / clearPreview。
      */
-    fun requestPreview() {
-        viewModelScope.launch {
-            _previewLoading.value = true
-            try {
-                val period = _periodType.value
-                val anchor = _form.value.periodStart
-                _previewText.value = buildPreviewString(period, anchor)
-            } finally {
-                _previewLoading.value = false
-            }
-        }
-    }
-
-    fun clearPreview() {
-        _previewText.value = null
-    }
 
     private suspend fun fetchRecentReviews(
         period: ReviewPeriod,

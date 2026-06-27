@@ -46,7 +46,6 @@ import com.example.timemanager.viewmodel.TodayUiEvent
 import kotlinx.coroutines.flow.distinctUntilChanged
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -159,7 +158,7 @@ fun TodayLedgerScreen(
     if (showDatePicker) {
         val state = rememberDatePickerState(
             initialSelectedDateMillis = selectedDate
-                .atStartOfDay(ZoneId.systemDefault())
+                .atStartOfDay(ZoneOffset.UTC)
                 .toInstant()
                 .toEpochMilli(),
             selectableDates = object : SelectableDates {
@@ -180,7 +179,7 @@ fun TodayLedgerScreen(
                         state.selectedDateMillis?.let { ms ->
                             viewModel.setDate(
                                 Instant.ofEpochMilli(ms)
-                                    .atZone(ZoneId.systemDefault())
+                                    .atZone(ZoneOffset.UTC)
                                     .toLocalDate()
                             )
                         }

@@ -54,7 +54,6 @@ import com.example.timemanager.viewmodel.AiState
 import com.example.timemanager.viewmodel.ReviewPeriod
 import com.example.timemanager.viewmodel.ReviewViewModel
 import java.time.Instant
-import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
@@ -67,8 +66,7 @@ fun ReviewScreen(viewModel: ReviewViewModel) {
     val aiState by viewModel.aiState.collectAsState()
     val aiConfirmed by viewModel.aiConfirmed.collectAsState()
     val monthPicker by viewModel.monthPicker.collectAsState()
-    val previewText by viewModel.previewText.collectAsState()
-    val previewLoading by viewModel.previewLoading.collectAsState()
+    val pendingPreview by viewModel.pendingPreview.collectAsState()
 
     val context = LocalContext.current
     var showPrivacyDialog by remember { mutableStateOf(false) }
@@ -138,7 +136,7 @@ fun ReviewScreen(viewModel: ReviewViewModel) {
                     if (aiConfirmed) viewModel.generateWithAi()
                     else showPrivacyDialog = true
                 },
-                enabled = aiState !is AiState.Loading,
+                enabled = aiState !is AiState.Loading && pendingPreview == null,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 if (aiState is AiState.Loading) {
@@ -151,24 +149,6 @@ fun ReviewScreen(viewModel: ReviewViewModel) {
                     Text("生成中…")
                 } else {
                     Text("AI 生成草稿")
-                }
-            }
-
-            OutlinedButton(
-                onClick = { viewModel.requestPreview() },
-                enabled = !previewLoading,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                if (previewLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.height(18.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("加载预览…")
-                } else {
-                    Text("预览上传内容")
                 }
             }
 
@@ -238,7 +218,7 @@ fun ReviewScreen(viewModel: ReviewViewModel) {
     if (showDatePicker) {
         val state = rememberDatePickerState(
             initialSelectedDateMillis = form.periodStart
-                .atStartOfDay(ZoneId.systemDefault())
+                .atStartOfDay(ZoneOffset.UTC)
                 .toInstant()
                 .toEpochMilli(),
             selectableDates = object : SelectableDates {
@@ -259,7 +239,7 @@ fun ReviewScreen(viewModel: ReviewViewModel) {
                         state.selectedDateMillis?.let { ms ->
                             viewModel.loadPeriodForDate(
                                 Instant.ofEpochMilli(ms)
-                                    .atZone(ZoneId.systemDefault())
+                                    .atZone(ZoneOffset.UTC)
                                     .toLocalDate()
                             )
                         }
@@ -285,8 +265,13 @@ fun ReviewScreen(viewModel: ReviewViewModel) {
         )
     }
 
-    previewText?.let { content ->
-        PreviewDialog(content = content, onDismiss = viewModel::clearPreview)
+    pendingPreview?.let { pending ->
+        PreviewDialog(
+            content = pending.previewText,
+            onDismiss = viewModel::cancelPendingPreview,
+            onConfirm = viewModel::confirmGenerate,
+            confirmLabel = "确认生成"
+        )
     }
 }
 
