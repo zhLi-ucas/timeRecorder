@@ -1,5 +1,6 @@
 package com.example.timemanager.ui.components
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,6 +32,7 @@ fun TimelineBlock(
     val baseColor = CategoryColors.colorFor(item.parent?.colorKey)
     val effAlpha = 0.5f + (item.entry.effectiveness.coerceIn(0, 100) / 100f) * 0.5f
     val color = if (isDragging) baseColor.copy(alpha = 0.98f) else baseColor.copy(alpha = effAlpha)
+    val onBlockColor = if (isSystemInDarkTheme()) Color.White else Color.Black
     val dragLayer = if (isDragging) {
         Modifier.graphicsLayer {
             translationY = dragOffsetY
@@ -59,24 +61,24 @@ fun TimelineBlock(
                 Text(
                     text = "${formatMinOfDay(item.entry.startMinOfDay)} – ${formatMinOfDay(item.entry.startMinOfDay + item.entry.durationMin)}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.85f)
+                    color = onBlockColor.copy(alpha = 0.85f)
                 )
                 Text(
                     text = item.entry.title.ifBlank { item.category?.name ?: "未命名" },
                     style = MaterialTheme.typography.titleMedium,
-                    color = Color.White
+                    color = onBlockColor
                 )
                 Text(
                     text = listOfNotNull(item.parent?.name, item.category?.name)
                         .joinToString(" / "),
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.75f)
+                    color = onBlockColor.copy(alpha = 0.75f)
                 )
             }
             Text(
                 text = formatDurationShort(item.entry.durationMin),
                 style = MaterialTheme.typography.titleLarge,
-                color = Color.White
+                color = onBlockColor
             )
         }
     }

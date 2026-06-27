@@ -1,5 +1,6 @@
 package com.example.timemanager.ui.components
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -52,6 +53,7 @@ fun ColorSwatchPicker(
 
 @Composable
 private fun ColorSwatch(color: Color, selected: Boolean, onClick: () -> Unit) {
+    val checkTint = if (isSystemInDarkTheme()) Color.White else Color.Black
     Box(
         modifier = Modifier
             .size(40.dp)
@@ -75,7 +77,7 @@ private fun ColorSwatch(color: Color, selected: Boolean, onClick: () -> Unit) {
             Icon(
                 imageVector = Icons.Filled.Check,
                 contentDescription = null,
-                tint = Color.White,
+                tint = checkTint,
                 modifier = Modifier.size(20.dp)
             )
         }
