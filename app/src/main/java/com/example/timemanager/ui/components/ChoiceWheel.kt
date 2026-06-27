@@ -1,31 +1,32 @@
 package com.example.timemanager.ui.components
 
-import androidx.compose.animation.core.AnimationState
-import androidx.compose.animation.core.animateDecay
-import androidx.compose.animation.rememberSplineBasedDecay
-import androidx.compose.foundation.gestures.FlingBehavior
-import androidx.compose.foundation.gestures.ScrollScope
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 @Composable
 fun <T> ChoiceWheel(
@@ -49,69 +51,76 @@ fun <T> ChoiceWheel(
     val hasHeader = headerLabel != null
     val headerOffset = if (hasHeader) 1 else 0
 
-    val listState = remember(items.firstOrNull(), headerLabel) {
-        val safe = selectedIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0))
-        LazyListState(
-            firstVisibleItemIndex = safe + headerOffset,
-            firstVisibleItemScrollOffset = 0
-        )
-    }
+    val stateKey = items.firstOrNull() to items.size
+    val scrollState = remember(stateKey, headerLabel) { ScrollState(initial = 0) }
     val density = LocalDensity.current
     val currentSelected by rememberUpdatedState(selectedIndex)
     val currentCallback by rememberUpdatedState(onSelectedChange)
+    val currentItemCount by rememberUpdatedState(items.size)
+    var userScrollPending by remember(stateKey, headerLabel) { mutableStateOf(false) }
 
     BoxWithConstraints(modifier = modifier.height(56.dp).fillMaxWidth()) {
         val sidePadding = ((maxWidth - itemWidth) / 2).coerceAtLeast(0.dp)
-        val sidePaddingPx = with(density) { sidePadding.toPx() }
-        val fling = rememberCenterSnapFling(listState, sidePaddingPx, headerOffset)
+        val itemWidthPx = with(density) { itemWidth.toPx() }
 
-        LaunchedEffect(items.size, selectedIndex, sidePaddingPx, headerLabel) {
+        LaunchedEffect(items.size, selectedIndex, itemWidthPx, headerLabel) {
             if (selectedIndex !in items.indices) return@LaunchedEffect
-            val centeredReal = listState.layoutInfo.visibleItemsInfo
-                .filter { it.index >= headerOffset }
-                .minByOrNull { info -> abs(info.offset - sidePaddingPx) }
-                ?.let { it.index - headerOffset }
-            if (centeredReal != selectedIndex) {
-                listState.scrollToItem(selectedIndex + headerOffset)
+            if (itemWidthPx <= 0f) return@LaunchedEffect
+            val target = ((selectedIndex + headerOffset) * itemWidthPx).roundToInt()
+            if (scrollState.value != target) {
+                scrollState.scrollTo(target)
             }
         }
 
-        LaunchedEffect(listState, sidePaddingPx, headerOffset) {
+        LaunchedEffect(scrollState, itemWidthPx, headerOffset) {
             snapshotFlow {
-                listState.layoutInfo.visibleItemsInfo
-                    .filter { it.index >= headerOffset }
-                    .minByOrNull { info -> abs(info.offset - sidePaddingPx) }
-                    ?.let { it.index - headerOffset }
+                scrollState.isScrollInProgress
             }
                 .distinctUntilChanged()
-                .collect { idx ->
-                    if (idx != null && idx != currentSelected && idx in items.indices) {
-                        currentCallback(idx)
+                .collect { isScrolling ->
+                    if (!isScrolling && userScrollPending && itemWidthPx > 0f) {
+                        userScrollPending = false
+                        if (currentItemCount == 0) return@collect
+                        val lazyIndex = (scrollState.value / itemWidthPx)
+                            .roundToInt()
+                            .coerceIn(headerOffset, headerOffset + currentItemCount - 1)
+                        scrollState.animateScrollTo((lazyIndex * itemWidthPx).roundToInt())
+                        val centered = lazyIndex - headerOffset
+                        if (centered != currentSelected && centered in 0 until currentItemCount) {
+                            currentCallback(centered)
+                        }
                     }
                 }
         }
 
-        LazyRow(
-            state = listState,
-            flingBehavior = fling,
-            contentPadding = PaddingValues(horizontal = sidePadding),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            if (hasHeader) {
-                item {
-                    Text(
-                        text = headerLabel!!,
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .size(width = itemWidth, height = 56.dp)
-                            .wrapContentHeight(Alignment.CenterVertically)
-                            .alpha(0.4f)
-                    )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        userScrollPending = true
+                        do {
+                            val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                        } while (event.changes.any { it.pressed })
+                    }
                 }
+                .horizontalScroll(scrollState)
+        ) {
+            Spacer(modifier = Modifier.size(width = sidePadding, height = 56.dp))
+            if (hasHeader) {
+                Text(
+                    text = headerLabel!!,
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .size(width = itemWidth, height = 56.dp)
+                        .wrapContentHeight(Alignment.CenterVertically)
+                        .alpha(0.4f)
+                )
             }
-            itemsIndexed(items) { i, item ->
+            items.forEachIndexed { i, item ->
                 val distance = abs(i - selectedIndex)
                 Text(
                     text = label(item),
@@ -125,40 +134,7 @@ fun <T> ChoiceWheel(
                         .alpha(when (distance) { 0 -> 1f; 1 -> 0.5f; else -> 0.3f })
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun rememberCenterSnapFling(
-    state: LazyListState,
-    sidePaddingPx: Float,
-    headerOffset: Int
-): FlingBehavior {
-    val decaySpec = rememberSplineBasedDecay<Float>()
-    return remember(state, sidePaddingPx, decaySpec, headerOffset) {
-        object : FlingBehavior {
-            override suspend fun ScrollScope.performFling(initialVelocity: Float): Float {
-                if (initialVelocity != 0f) {
-                    var lastValue = 0f
-                    AnimationState(
-                        initialValue = 0f,
-                        initialVelocity = initialVelocity
-                    ).animateDecay(decaySpec) {
-                        val delta = value - lastValue
-                        lastValue = value
-                        scrollBy(delta)
-                    }
-                }
-                val targetLazy = state.layoutInfo.visibleItemsInfo.minByOrNull { info ->
-                    abs(info.offset - sidePaddingPx)
-                }?.index
-                if (targetLazy != null) {
-                    val effective = if (targetLazy < headerOffset) headerOffset else targetLazy
-                    state.animateScrollToItem(effective)
-                }
-                return 0f
-            }
+            Spacer(modifier = Modifier.size(width = sidePadding, height = 56.dp))
         }
     }
 }
