@@ -115,6 +115,7 @@ fun RecordScreen(
                 selectedIndex = parents.indexOfFirst { it.id == form.parentCategoryId }.coerceAtLeast(0),
                 onSelectedChange = { i -> viewModel.selectParent(parents[i].id) },
                 label = { it.name },
+                headerLabel = "一级分类",
                 selectedColor = parents.getOrNull(0)?.colorKey?.let {
                     CategoryColors.colorFor(it)
                 } ?: MaterialTheme.colorScheme.primary
@@ -130,7 +131,8 @@ fun RecordScreen(
                     items = visibleChildren,
                     selectedIndex = safeIdx,
                     onSelectedChange = { i -> viewModel.selectCategory(visibleChildren[i].id) },
-                    label = { it.name }
+                    label = { it.name },
+                    headerLabel = "二级分类"
                 )
             }
 
