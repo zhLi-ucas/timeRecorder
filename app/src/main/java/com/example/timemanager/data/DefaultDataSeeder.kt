@@ -114,5 +114,20 @@ class DefaultDataSeeder(private val db: AppDatabase) {
         const val KEY_DEEPSEEK_MODEL = "deepseek_model"
         const val KEY_AI_CONFIRMED = "ai_confirmed"
         const val DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash"
+
+        // v1.3：AI prompt 可编辑 + 上下文窗口配置
+        const val KEY_DEEPSEEK_PROMPT = "deepseek_prompt"
+        const val KEY_AI_CONTEXT_DAY_DAYS = "ai_context_day_days"
+        const val KEY_AI_CONTEXT_WEEK_DAYS = "ai_context_week_days"
+
+        // 用户可编辑部分；{period} 占位符发送前替换为 "日"/"周"/"月"
+        const val DEFAULT_DEEPSEEK_PROMPT =
+            "后面的 json 是本{period}的时间统计报告，请根据这个写一个 200 字左右的小结，" +
+                "包括最有价值时段，浪费多少，对明天的调整。"
+
+        // 始终追加在用户 prompt 末尾——保底 JSON 输出格式，防解析失败
+        const val JSON_FORMAT_SUFFIX =
+            "必须以 JSON 返回，字段为 {\"summary\": str, \"findings\": str, \"adjust\": str}，" +
+                "分别对应「主要时间投入」「时间结构问题」「下一步调整」，每段 60-80 字。"
     }
 }

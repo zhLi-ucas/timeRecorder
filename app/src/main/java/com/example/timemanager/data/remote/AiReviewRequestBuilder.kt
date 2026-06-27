@@ -1,5 +1,6 @@
 package com.example.timemanager.data.remote
 
+import com.example.timemanager.data.DefaultDataSeeder
 import com.example.timemanager.data.entity.CategoryEntity
 import com.example.timemanager.data.entity.ReviewEntity
 import com.example.timemanager.data.entity.TimeEntryEntity
@@ -16,30 +17,67 @@ data class ParsedReview(
 
 object AiReviewRequestBuilder {
 
-    private const val SYSTEM_PROMPT =
-        "后面的 json 是周/日/月的基本报告，请根据这个写一个 200 字左右的小结，" +
-            "包括最有价值时段，浪费多少，对明天的调整。" +
-            "必须以 JSON 返回，字段为 {\"summary\": str, \"findings\": str, \"adjust\": str}，" +
-            "分别对应「主要时间投入」「时间结构问题」「下一步调整」，每段 60-80 字。"
-
     fun buildMessages(
         period: ReviewPeriod,
         currentRange: Pair<LocalDate, LocalDate>,
-        previousRange: Pair<LocalDate, LocalDate>,
         entries: List<TimeEntryEntity>,
-        previousEntries: List<TimeEntryEntity>,
         categories: List<CategoryEntity>,
-        previousReview: ReviewEntity?,
-        dayStartMin: Int
+        recentReviews: List<ReviewEntity>,
+        dayStartMin: Int,
+        effectivePrompt: String
     ): JSONArray {
+        val userObj = buildUserObject(
+            period, currentRange, entries, categories, recentReviews, dayStartMin
+        )
+        val systemContent = effectivePrompt + "\n\n" + DefaultDataSeeder.JSON_FORMAT_SUFFIX
+        return JSONArray().apply {
+            put(JSONObject().put("role", "system").put("content", systemContent))
+            put(JSONObject().put("role", "user").put("content", userObj.toString()))
+        }
+    }
+
+    /**
+     * 预览用：返回人类可读的 system + user 完整内容，不发请求。
+     * 与 buildMessages 共享 user object 构造逻辑。
+     */
+    fun buildPreview(
+        period: ReviewPeriod,
+        currentRange: Pair<LocalDate, LocalDate>,
+        entries: List<TimeEntryEntity>,
+        categories: List<CategoryEntity>,
+        recentReviews: List<ReviewEntity>,
+        dayStartMin: Int,
+        effectivePrompt: String,
+        model: String
+    ): String {
+        val userObj = buildUserObject(
+            period, currentRange, entries, categories, recentReviews, dayStartMin
+        )
+        val systemContent = effectivePrompt + "\n\n" + DefaultDataSeeder.JSON_FORMAT_SUFFIX
+        val prettyJson = userObj.toString(2)
+        return buildString {
+            appendLine("═══ 模型 ═══")
+            appendLine(model)
+            appendLine()
+            appendLine("═══ System message ═══")
+            appendLine(systemContent)
+            appendLine()
+            appendLine("═══ User message (JSON) ═══")
+            appendLine(prettyJson)
+        }
+    }
+
+    private fun buildUserObject(
+        period: ReviewPeriod,
+        currentRange: Pair<LocalDate, LocalDate>,
+        entries: List<TimeEntryEntity>,
+        categories: List<CategoryEntity>,
+        recentReviews: List<ReviewEntity>,
+        dayStartMin: Int
+    ): JSONObject {
         val byId = categories.associateBy { it.id }
-        val snapshot = buildSnapshot(
-            period, currentRange, entries, byId, dayStartMin
-        )
-        val previousSnapshot = buildSnapshot(
-            period, previousRange, previousEntries, byId, dayStartMin, tag = "previous"
-        )
-        val userObj = JSONObject().apply {
+        val snapshot = buildSnapshot(period, currentRange, entries, byId, dayStartMin)
+        return JSONObject().apply {
             put("period", JSONObject().apply {
                 put("type", period.name)
                 put("start", currentRange.first.toString())
@@ -47,18 +85,18 @@ object AiReviewRequestBuilder {
             })
             put("dayStartMin", dayStartMin)
             put("current", snapshot)
-            put("previous", previousSnapshot)
-            if (previousReview != null) {
-                put("previousReview", JSONObject().apply {
-                    put("summary", previousReview.summaryText.orEmpty())
-                    put("findings", previousReview.mainFindings.orEmpty())
-                    put("adjust", previousReview.adjustmentPlan.orEmpty())
+            if (recentReviews.isNotEmpty()) {
+                put("recentReviews", JSONArray().apply {
+                    recentReviews.forEach { r -> put(JSONObject().apply {
+                        put("periodType", r.periodType)
+                        put("periodStart", r.periodStart.toString())
+                        put("periodEnd", r.periodEnd.toString())
+                        put("summary", r.summaryText.orEmpty())
+                        put("findings", r.mainFindings.orEmpty())
+                        put("adjust", r.adjustmentPlan.orEmpty())
+                    }) }
                 })
             }
-        }
-        return JSONArray().apply {
-            put(JSONObject().put("role", "system").put("content", SYSTEM_PROMPT))
-            put(JSONObject().put("role", "user").put("content", userObj.toString()))
         }
     }
 
@@ -67,8 +105,7 @@ object AiReviewRequestBuilder {
         range: Pair<LocalDate, LocalDate>,
         entries: List<TimeEntryEntity>,
         categoriesById: Map<String, CategoryEntity>,
-        dayStartMin: Int,
-        tag: String = "current"
+        dayStartMin: Int
     ): JSONObject {
         val INVALID_PARENT_ID = "cat_invalid"
         val OTHER_PARENT_ID = "cat_other"

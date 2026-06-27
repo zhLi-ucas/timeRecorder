@@ -48,6 +48,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.timemanager.data.entity.ReviewEntity
+import com.example.timemanager.ui.components.MonthReviewPickerDialog
+import com.example.timemanager.ui.components.PreviewDialog
 import com.example.timemanager.viewmodel.AiState
 import com.example.timemanager.viewmodel.ReviewPeriod
 import com.example.timemanager.viewmodel.ReviewViewModel
@@ -64,6 +66,9 @@ fun ReviewScreen(viewModel: ReviewViewModel) {
     val history by viewModel.history.collectAsState()
     val aiState by viewModel.aiState.collectAsState()
     val aiConfirmed by viewModel.aiConfirmed.collectAsState()
+    val monthPicker by viewModel.monthPicker.collectAsState()
+    val previewText by viewModel.previewText.collectAsState()
+    val previewLoading by viewModel.previewLoading.collectAsState()
 
     val context = LocalContext.current
     var showPrivacyDialog by remember { mutableStateOf(false) }
@@ -146,6 +151,24 @@ fun ReviewScreen(viewModel: ReviewViewModel) {
                     Text("生成中…")
                 } else {
                     Text("AI 生成草稿")
+                }
+            }
+
+            OutlinedButton(
+                onClick = { viewModel.requestPreview() },
+                enabled = !previewLoading,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (previewLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.height(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("加载预览…")
+                } else {
+                    Text("预览上传内容")
                 }
             }
 
@@ -250,6 +273,20 @@ fun ReviewScreen(viewModel: ReviewViewModel) {
         ) {
             DatePicker(state = state)
         }
+    }
+
+    monthPicker?.let { options ->
+        MonthReviewPickerDialog(
+            options = options,
+            onToggle = { monday, sel -> viewModel.setMonthWeekSelected(monday, sel) },
+            onSelectAll = { viewModel.toggleAllMonthWeeks(true) },
+            onDismiss = { viewModel.cancelMonthPicker() },
+            onConfirm = { viewModel.confirmMonthPicker() }
+        )
+    }
+
+    previewText?.let { content ->
+        PreviewDialog(content = content, onDismiss = viewModel::clearPreview)
     }
 }
 

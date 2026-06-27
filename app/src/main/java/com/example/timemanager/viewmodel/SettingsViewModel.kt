@@ -8,9 +8,12 @@ import com.example.timemanager.data.db.AppDatabase
 import com.example.timemanager.data.entity.AppSettingEntity
 import com.example.timemanager.data.entity.CategoryEntity
 import com.example.timemanager.data.entity.ProjectEntity
+import com.example.timemanager.data.entity.ReviewEntity
+import com.example.timemanager.data.remote.AiReviewRequestBuilder
 import com.example.timemanager.data.remote.DeepSeekApi
 import com.example.timemanager.data.remote.DeepSeekConfig
 import com.example.timemanager.util.CsvExporter
+import com.example.timemanager.util.DateRange
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -20,9 +23,11 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
@@ -48,8 +53,23 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _deepseekModel = MutableStateFlow(DefaultDataSeeder.DEFAULT_DEEPSEEK_MODEL)
     val deepseekModel: StateFlow<String> = _deepseekModel.asStateFlow()
 
+    private val _deepseekPrompt = MutableStateFlow(DefaultDataSeeder.DEFAULT_DEEPSEEK_PROMPT)
+    val deepseekPrompt: StateFlow<String> = _deepseekPrompt.asStateFlow()
+
+    private val _aiContextDayDays = MutableStateFlow(3)
+    val aiContextDayDays: StateFlow<Int> = _aiContextDayDays.asStateFlow()
+
+    private val _aiContextWeekDays = MutableStateFlow(7)
+    val aiContextWeekDays: StateFlow<Int> = _aiContextWeekDays.asStateFlow()
+
     private val _deepseekTestState = MutableStateFlow<DeepSeekTestState>(DeepSeekTestState.Idle)
     val deepseekTestState: StateFlow<DeepSeekTestState> = _deepseekTestState.asStateFlow()
+
+    private val _previewText = MutableStateFlow<String?>(null)
+    val previewText: StateFlow<String?> = _previewText.asStateFlow()
+
+    private val _previewLoading = MutableStateFlow(false)
+    val previewLoading: StateFlow<Boolean> = _previewLoading.asStateFlow()
 
     private val _toast = MutableStateFlow<String?>(null)
     val toast: StateFlow<String?> = _toast.asStateFlow()
@@ -62,6 +82,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             _deepseekModel.value = settingDao.getByKey(DefaultDataSeeder.KEY_DEEPSEEK_MODEL)
                 ?.ifBlank { null }
                 ?: DefaultDataSeeder.DEFAULT_DEEPSEEK_MODEL
+            _deepseekPrompt.value = settingDao.getByKey(DefaultDataSeeder.KEY_DEEPSEEK_PROMPT)
+                ?.ifBlank { null }
+                ?: DefaultDataSeeder.DEFAULT_DEEPSEEK_PROMPT
+            _aiContextDayDays.value = settingDao.getByKey(DefaultDataSeeder.KEY_AI_CONTEXT_DAY_DAYS)
+                ?.toIntOrNull() ?: 3
+            _aiContextWeekDays.value = settingDao.getByKey(DefaultDataSeeder.KEY_AI_CONTEXT_WEEK_DAYS)
+                ?.toIntOrNull() ?: 7
         }
     }
 
@@ -206,6 +233,94 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             settingDao.upsert(AppSettingEntity(DefaultDataSeeder.KEY_DEEPSEEK_MODEL, model))
             _deepseekTestState.value = DeepSeekTestState.Idle
         }
+    }
+
+    fun setDeepSeekPrompt(prompt: String) {
+        _deepseekPrompt.value = prompt
+        viewModelScope.launch {
+            settingDao.upsert(AppSettingEntity(DefaultDataSeeder.KEY_DEEPSEEK_PROMPT, prompt))
+        }
+    }
+
+    fun resetDeepSeekPrompt() {
+        setDeepSeekPrompt(DefaultDataSeeder.DEFAULT_DEEPSEEK_PROMPT)
+    }
+
+    fun setAiContextDayDays(n: Int) {
+        val clamped = n.coerceIn(1, 14)
+        _aiContextDayDays.value = clamped
+        viewModelScope.launch {
+            settingDao.upsert(AppSettingEntity(DefaultDataSeeder.KEY_AI_CONTEXT_DAY_DAYS, clamped.toString()))
+        }
+    }
+
+    fun setAiContextWeekDays(n: Int) {
+        val clamped = n.coerceIn(1, 7)
+        _aiContextWeekDays.value = clamped
+        viewModelScope.launch {
+            settingDao.upsert(AppSettingEntity(DefaultDataSeeder.KEY_AI_CONTEXT_WEEK_DAYS, clamped.toString()))
+        }
+    }
+
+    // ==================== 预览 ====================
+
+    /**
+     * Settings 子页预览：固定用 WEEK range + today 真实数据，让用户看到 prompt 替换后的
+     * 完整上传内容（system + user JSON）。prompt 参数从输入框 draft 传入——用户调 prompt
+     * 后即使没保存也能即时预览。
+     */
+    fun requestPreview(prompt: String) {
+        viewModelScope.launch {
+            _previewLoading.value = true
+            try {
+                _previewText.value = buildAiPreviewString(prompt)
+            } finally {
+                _previewLoading.value = false
+            }
+        }
+    }
+
+    fun clearPreview() {
+        _previewText.value = null
+    }
+
+    private suspend fun buildAiPreviewString(prompt: String): String {
+        val period = ReviewPeriod.WEEK
+        val anchor = LocalDate.now()
+        val model = _deepseekModel.value
+        val currentRange = DateRange.currentFor(period, anchor)
+        val entries = entryDao.getByDateRange(currentRange.first, currentRange.second)
+        val categories = categoryDao.getAll()
+        val dayStart = _dayStartMin.value
+        val recentReviews = fetchRecentReviewsPreview(period, anchor)
+        val effectivePrompt = prompt.replace("{period}", "周")
+        return AiReviewRequestBuilder.buildPreview(
+            period, currentRange, entries, categories, recentReviews, dayStart, effectivePrompt, model
+        )
+    }
+
+    private suspend fun fetchRecentReviewsPreview(
+        period: ReviewPeriod,
+        anchor: LocalDate
+    ): List<ReviewEntity> = when (period) {
+        ReviewPeriod.DAY -> {
+            val n = _aiContextDayDays.value
+            (0 until n).mapNotNull { offset ->
+                val d = anchor.minusDays(offset.toLong())
+                reviewDao.getByPeriod(ReviewPeriod.DAY.name, d, d)
+            }
+        }
+        ReviewPeriod.WEEK -> {
+            val n = _aiContextWeekDays.value
+            val monday = anchor.with(DayOfWeek.MONDAY)
+            val daysFromMonday = ChronoUnit.DAYS.between(monday, anchor).toInt() + 1
+            val effectiveN = minOf(n, daysFromMonday)
+            (0 until effectiveN).mapNotNull { offset ->
+                val d = anchor.minusDays(offset.toLong())
+                reviewDao.getByPeriod(ReviewPeriod.DAY.name, d, d)
+            }
+        }
+        ReviewPeriod.MONTH -> emptyList()   // 预览固定 WEEK，不进 MONTH 分支
     }
 
     fun testDeepSeekConnection() {

@@ -19,8 +19,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 enum class ReviewPeriod(
@@ -46,6 +48,13 @@ data class ReviewFormState(
     val isEditing: Boolean get() = editingId != null
 }
 
+data class MonthWeekOption(
+    val monday: LocalDate,
+    val sunday: LocalDate,
+    val review: ReviewEntity?,
+    val selected: Boolean
+)
+
 class ReviewViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getInstance(application)
     private val reviewDao = db.reviewDao()
@@ -64,6 +73,15 @@ class ReviewViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _aiConfirmed = MutableStateFlow(false)
     val aiConfirmed: StateFlow<Boolean> = _aiConfirmed.asStateFlow()
+
+    private val _monthPicker = MutableStateFlow<List<MonthWeekOption>?>(null)
+    val monthPicker: StateFlow<List<MonthWeekOption>?> = _monthPicker.asStateFlow()
+
+    private val _previewText = MutableStateFlow<String?>(null)
+    val previewText: StateFlow<String?> = _previewText.asStateFlow()
+
+    private val _previewLoading = MutableStateFlow(false)
+    val previewLoading: StateFlow<Boolean> = _previewLoading.asStateFlow()
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val history: StateFlow<List<ReviewEntity>> = _periodType
@@ -155,7 +173,65 @@ class ReviewViewModel(application: Application) : AndroidViewModel(application) 
         if (_aiState.value !is AiState.Loading) _aiState.value = AiState.Idle
     }
 
+    // ==================== AI 生成 ====================
+
     fun generateWithAi() {
+        if (_aiState.value is AiState.Loading) return
+        val period = _periodType.value
+        val today = LocalDate.now()
+
+        if (period == ReviewPeriod.MONTH) {
+            // MONTH 走 dialog 让用户勾选本周别周报
+            viewModelScope.launch {
+                val options = buildMonthWeekOptions(today)
+                if (options.none { it.review != null }) {
+                    _aiState.value = AiState.Error("本月没有任何周复盘，请先在 REVIEW tab 写至少一周")
+                    return@launch
+                }
+                _monthPicker.value = options
+            }
+            return
+        }
+        proceedAiCall(period, today, selectedMondays = null)
+    }
+
+    fun setMonthWeekSelected(monday: LocalDate, selected: Boolean) {
+        val current = _monthPicker.value ?: return
+        _monthPicker.value = current.map { opt ->
+            if (opt.monday == monday && opt.review != null) opt.copy(selected = selected) else opt
+        }
+    }
+
+    fun toggleAllMonthWeeks(selectAll: Boolean) {
+        val current = _monthPicker.value ?: return
+        _monthPicker.value = current.map { opt ->
+            if (opt.review != null) opt.copy(selected = selectAll) else opt
+        }
+    }
+
+    fun cancelMonthPicker() {
+        _monthPicker.value = null
+        _aiState.value = AiState.Idle
+    }
+
+    fun confirmMonthPicker() {
+        val selected = _monthPicker.value
+            ?.filter { it.selected }
+            ?.map { it.monday }
+            ?: emptyList()
+        _monthPicker.value = null
+        if (selected.isEmpty()) {
+            _aiState.value = AiState.Error("未勾选任何周复盘")
+            return
+        }
+        proceedAiCall(ReviewPeriod.MONTH, LocalDate.now(), selected)
+    }
+
+    private fun proceedAiCall(
+        period: ReviewPeriod,
+        anchor: LocalDate,
+        selectedMondays: List<LocalDate>?
+    ) {
         if (_aiState.value is AiState.Loading) return
         _aiState.value = AiState.Loading
         viewModelScope.launch {
@@ -167,27 +243,29 @@ class ReviewViewModel(application: Application) : AndroidViewModel(application) 
             val model = settingDao.getByKey(DefaultDataSeeder.KEY_DEEPSEEK_MODEL)
                 ?.ifBlank { null }
                 ?: DefaultDataSeeder.DEFAULT_DEEPSEEK_MODEL
+            val userPrompt = settingDao.getByKey(DefaultDataSeeder.KEY_DEEPSEEK_PROMPT)
+                ?.ifBlank { null }
+                ?: DefaultDataSeeder.DEFAULT_DEEPSEEK_PROMPT
             val cfg = DeepSeekConfig(apiKey = key, model = model)
 
-            val period = _periodType.value
-            val today = LocalDate.now()
-            val currentRange = DateRange.currentFor(period, today)
-            val previousRange = DateRange.previousFor(period, today)
-
+            val currentRange = DateRange.currentFor(period, anchor)
             val entries = entryDao.getByDateRange(currentRange.first, currentRange.second)
-            val prevEntries = entryDao.getByDateRange(previousRange.first, previousRange.second)
-            val categories = categoryDao.getAll()
-            val previousReview = reviewDao.getByPeriod(period.name, previousRange.first, previousRange.second)
-            val dayStart = settingDao.getByKey(DefaultDataSeeder.KEY_DAY_START_MIN)?.toIntOrNull() ?: 480
-
             if (entries.isEmpty()) {
                 _aiState.value = AiState.Error("本${period.label}暂无时间记录，无法生成")
                 return@launch
             }
+            val categories = categoryDao.getAll()
+            val dayStart = settingDao.getByKey(DefaultDataSeeder.KEY_DAY_START_MIN)?.toIntOrNull() ?: 480
+            val recentReviews = fetchRecentReviews(period, anchor, selectedMondays)
 
+            val periodWord = when (period) {
+                ReviewPeriod.DAY -> "日"
+                ReviewPeriod.WEEK -> "周"
+                ReviewPeriod.MONTH -> "月"
+            }
+            val effectivePrompt = userPrompt.replace("{period}", periodWord)
             val messages = AiReviewRequestBuilder.buildMessages(
-                period, currentRange, previousRange,
-                entries, prevEntries, categories, previousReview, dayStart
+                period, currentRange, entries, categories, recentReviews, dayStart, effectivePrompt
             )
             when (val r = DeepSeekApi(cfg).chat(messages, jsonMode = true, maxTokens = 2000)) {
                 is DeepSeekApi.Result.Success -> {
@@ -206,6 +284,102 @@ class ReviewViewModel(application: Application) : AndroidViewModel(application) 
                 is DeepSeekApi.Result.Error ->
                     _aiState.value = AiState.Error("API key 无效或网络错误：${r.message}")
             }
+        }
+    }
+
+    /**
+     * 预览：不发请求，构造完整的 system + user JSON 文本。
+     * Settings 子页用当前真实数据（今天，若空则最近有数据日）。
+     */
+    suspend fun buildPreviewString(period: ReviewPeriod, anchor: LocalDate): String {
+        val model = settingDao.getByKey(DefaultDataSeeder.KEY_DEEPSEEK_MODEL)
+            ?.ifBlank { null }
+            ?: DefaultDataSeeder.DEFAULT_DEEPSEEK_MODEL
+        val userPrompt = settingDao.getByKey(DefaultDataSeeder.KEY_DEEPSEEK_PROMPT)
+            ?.ifBlank { null }
+            ?: DefaultDataSeeder.DEFAULT_DEEPSEEK_PROMPT
+
+        val currentRange = DateRange.currentFor(period, anchor)
+        val entries = entryDao.getByDateRange(currentRange.first, currentRange.second)
+        val categories = categoryDao.getAll()
+        val dayStart = settingDao.getByKey(DefaultDataSeeder.KEY_DAY_START_MIN)?.toIntOrNull() ?: 480
+        val recentReviews = fetchRecentReviews(period, anchor, selectedMondays = null)
+
+        val periodWord = when (period) {
+            ReviewPeriod.DAY -> "日"
+            ReviewPeriod.WEEK -> "周"
+            ReviewPeriod.MONTH -> "月"
+        }
+        val effectivePrompt = userPrompt.replace("{period}", periodWord)
+        return AiReviewRequestBuilder.buildPreview(
+            period, currentRange, entries, categories, recentReviews, dayStart, effectivePrompt, model
+        )
+    }
+
+    /**
+     * REVIEW 屏预览入口：用当前 period + form 的 periodStart 作为 anchor，
+     * 调用 buildPreviewString 并写到 _previewText 供 UI 弹 dialog。
+     */
+    fun requestPreview() {
+        viewModelScope.launch {
+            _previewLoading.value = true
+            try {
+                val period = _periodType.value
+                val anchor = _form.value.periodStart
+                _previewText.value = buildPreviewString(period, anchor)
+            } finally {
+                _previewLoading.value = false
+            }
+        }
+    }
+
+    fun clearPreview() {
+        _previewText.value = null
+    }
+
+    private suspend fun fetchRecentReviews(
+        period: ReviewPeriod,
+        anchor: LocalDate,
+        selectedMondays: List<LocalDate>?
+    ): List<ReviewEntity> = when (period) {
+        ReviewPeriod.DAY -> {
+            val n = settingDao.getByKey(DefaultDataSeeder.KEY_AI_CONTEXT_DAY_DAYS)?.toIntOrNull() ?: 3
+            (0 until n).mapNotNull { offset ->
+                val d = anchor.minusDays(offset.toLong())
+                reviewDao.getByPeriod(ReviewPeriod.DAY.name, d, d)
+            }
+        }
+        ReviewPeriod.WEEK -> {
+            val n = settingDao.getByKey(DefaultDataSeeder.KEY_AI_CONTEXT_WEEK_DAYS)?.toIntOrNull() ?: 7
+            val monday = anchor.with(DayOfWeek.MONDAY)
+            val daysFromMonday = ChronoUnit.DAYS.between(monday, anchor).toInt() + 1
+            val effectiveN = minOf(n, daysFromMonday)
+            (0 until effectiveN).mapNotNull { offset ->
+                val d = anchor.minusDays(offset.toLong())
+                reviewDao.getByPeriod(ReviewPeriod.DAY.name, d, d)
+            }
+        }
+        ReviewPeriod.MONTH -> {
+            val mondays = selectedMondays ?: buildMonthWeekOptions(anchor)
+                .filter { it.review != null }
+                .map { it.monday }
+            mondays.mapNotNull { monday ->
+                reviewDao.getByPeriod(ReviewPeriod.WEEK.name, monday, monday.plusDays(6))
+            }
+        }
+    }
+
+    private suspend fun buildMonthWeekOptions(anchor: LocalDate): List<MonthWeekOption> {
+        val monthStart = anchor.withDayOfMonth(1)
+        val daysInMonth = anchor.lengthOfMonth()
+        val mondays = (0 until daysInMonth).mapNotNull { offset ->
+            val d = monthStart.plusDays(offset.toLong())
+            d.with(DayOfWeek.MONDAY)
+        }.distinct()
+        return mondays.map { monday ->
+            val sunday = monday.plusDays(6)
+            val review = reviewDao.getByPeriod(ReviewPeriod.WEEK.name, monday, sunday)
+            MonthWeekOption(monday, sunday, review, selected = review != null)
         }
     }
 
