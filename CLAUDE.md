@@ -175,7 +175,7 @@ User edits to categories (rename / archive / add) **persist across app updates**
 
 `WheelPicker` is a hand-rolled Compose wheel using `LazyColumn` + `rememberSnapFlingBehavior` — M3 has no built-in. Don't swap for a text field; the previous text-field design had a state-coupling bug where typing "150" visually snapped to the "15m" chip.
 
-**v1.2 RECORD 屏改用 `ChoiceWheel`**（横向 LazyRow），三处滑选：L1 / L2 / 时长 0–240min（5min step）。ChoiceWheel 用 `BoxWithConstraints` 量真实 viewport → `sidePadding = (maxWidth - itemWidth) / 2` 让项真正居中；自写 `rememberCenterSnapFling`（spline-based decay + offset-distance snap）；左边界 snap bug 用 `headerLabel` 不可选列表头吸收（L1=「一级分类」、L2=「二级分类」）。详见 `ui/components/ChoiceWheel.kt`。
+**v1.2 RECORD 屏改用 `ChoiceWheel`**（横向滑选），三处滑选：L1 / L2 / 时长 0–240min（5min step）。ChoiceWheel 用 `BoxWithConstraints` 量真实 viewport → `sidePadding = (maxWidth - itemWidth) / 2`；**实现走 `Row + horizontalScroll(ScrollState)`**（v1.2 发布后由 LazyRow 重写而来——LazyRow + contentPadding 在左边界永远算错 snap 目标，headerLabel workaround 已废弃，仅保留作视觉标签），两端塞 `sidePadding` Spacer 让 item 0 物理上能滚到中心；`pointerInput + awaitEachGesture` 检测手势翻 `userScrollPending` flag；`snapshotFlow { isScrollInProgress }` 收到滚动停止 → `animateScrollTo` 吸附 `scrollState.value / itemWidthPx` 最近项。详见 `ui/components/ChoiceWheel.kt`。
 
 ### Timeline drag-reorder
 
