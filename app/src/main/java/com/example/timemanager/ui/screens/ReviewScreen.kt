@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,16 +17,25 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -33,6 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -40,9 +51,12 @@ import com.example.timemanager.data.entity.ReviewEntity
 import com.example.timemanager.viewmodel.AiState
 import com.example.timemanager.viewmodel.ReviewPeriod
 import com.example.timemanager.viewmodel.ReviewViewModel
+import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ReviewScreen(viewModel: ReviewViewModel) {
     val period by viewModel.periodType.collectAsState()
@@ -53,6 +67,7 @@ fun ReviewScreen(viewModel: ReviewViewModel) {
 
     val context = LocalContext.current
     var showPrivacyDialog by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(aiState) {
         (aiState as? AiState.Error)?.let {
@@ -64,7 +79,8 @@ fun ReviewScreen(viewModel: ReviewViewModel) {
     Column(modifier = Modifier.fillMaxSize()) {
         ReviewHeader(
             periodLabel = period.label,
-            rangeText = "${form.periodStart} ~ ${form.periodEnd}"
+            rangeText = "${form.periodStart} ~ ${form.periodEnd}",
+            onDateClick = { showDatePicker = true }
         )
         HorizontalDivider()
         FlowRow(
@@ -195,21 +211,73 @@ fun ReviewScreen(viewModel: ReviewViewModel) {
             }
         )
     }
+
+    if (showDatePicker) {
+        val state = rememberDatePickerState(
+            initialSelectedDateMillis = form.periodStart
+                .atStartOfDay(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli(),
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                    val todayUtcMillis = java.time.LocalDate.now()
+                        .atStartOfDay(ZoneOffset.UTC)
+                        .toInstant()
+                        .toEpochMilli()
+                    return utcTimeMillis <= todayUtcMillis
+                }
+            }
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        state.selectedDateMillis?.let { ms ->
+                            viewModel.loadPeriodForDate(
+                                Instant.ofEpochMilli(ms)
+                                    .atZone(ZoneId.systemDefault())
+                                    .toLocalDate()
+                            )
+                        }
+                        showDatePicker = false
+                    }
+                ) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("取消") }
+            }
+        ) {
+            DatePicker(state = state)
+        }
+    }
 }
 
 @Composable
-private fun ReviewHeader(periodLabel: String, rangeText: String) {
-    Column(
+private fun ReviewHeader(periodLabel: String, rangeText: String, onDateClick: () -> Unit) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(text = "复盘", style = MaterialTheme.typography.headlineSmall)
-        Text(
-            text = "本$periodLabel  $rangeText",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = "复盘", style = MaterialTheme.typography.headlineSmall)
+            TextButton(
+                onClick = onDateClick,
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Text(
+                    text = "本$periodLabel  $rangeText",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        IconButton(onClick = onDateClick) {
+            Icon(Icons.Filled.CalendarMonth, contentDescription = "选择时段")
+        }
     }
 }
 

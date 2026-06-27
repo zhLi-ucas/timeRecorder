@@ -64,7 +64,8 @@ class StatsViewModel(application: Application) : AndroidViewModel(application) {
     val validAnchors: StateFlow<List<LocalDate>> = _range
         .flatMapLatest { range ->
             entryDao.observeAllDates().map { dates ->
-                dates.map { anchorForRange(range, it) }.distinct().sortedDescending()
+                // asc：idx=0 最旧，idx=size-1 最新；与 TODAY 屏一致——右滑看过去
+                dates.map { anchorForRange(range, it) }.distinct().sorted()
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -101,11 +102,12 @@ class StatsViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             validAnchors.collect { anchors ->
                 if (anchors.isEmpty()) return@collect
+                val latest = anchors.size - 1   // asc 排列下，最新在末端
                 val target = _userAnchor.value
                 val newIdx = when {
-                    target == null -> 0
+                    target == null -> latest
                     anchors.contains(target) -> anchors.indexOf(target)
-                    else -> 0
+                    else -> latest   // anchor 被删空，clamp 到最新
                 }
                 if (_selectedIdx.value != newIdx) _selectedIdx.value = newIdx
                 _userAnchor.value = anchors[newIdx]

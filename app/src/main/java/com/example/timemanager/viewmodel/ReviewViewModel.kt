@@ -102,6 +102,12 @@ class ReviewViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun loadPeriodForDate(date: LocalDate) {
+        val type = _periodType.value
+        val (start, end) = DateRange.currentFor(type, date)
+        loadPeriod(start, end)
+    }
+
     private fun loadCurrentPeriodForm() {
         val (start, end) = DateRange.currentFor(_periodType.value, LocalDate.now())
         loadPeriod(start, end)
