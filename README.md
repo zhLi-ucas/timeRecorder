@@ -6,15 +6,16 @@
 
 ## 核心特性
 
-- **Duration-first 录入**：选日期 → 一级/二级分类 → 时长（chip + 自定义）→ 标题（可选）→ 保存，30 秒一条
-- **今日时间线**：block 默认从默认起点（08:00）紧贴堆叠；点击编辑、长按菜单删除
+- **Duration-first 录入**：日期 → 一级/二级分类（横向 ChoiceWheel 滑选）→ 时长（0–240min 5min 步进滑选）→ 效能（0–100 slider）→ 备注（可选）→ 保存，标题自动派生 `L1·L2`
+- **今日时间线**：block 默认从默认起点（08:00）紧贴堆叠；点击编辑、长按菜单删除；**尾部「+」占位框**一键插 10min 休息/间隔
 - **长按拖拽 reorder**：5 分钟 snap + cascade shift（重叠时下方 block 整体后移）；越过 24:00 拒绝
-- **统计聚合**：日/周/月/年 4 范围；一/二级分类横向条形 + 百分比
+- **统计聚合**：日/周/月/年 4 范围（默认本周）；一/二级分类横向条形 + 百分比；**效能加权**（无效分钟计入 cat_invalid）
+- **AI 复盘草稿**：REVIEW 一键调用 DeepSeek（v4-flash / v4-pro），上传双周期时间记录 + 上次复盘 → AI 生成三段文字（最有价值时段 / 浪费 / 调整），用户审阅微调后保存
 - **周期复盘**：日 / 周 / 月三套模板字段，历史可回溯
-- **分类 / 项目管理**：8 默认一级 + 34 二级，可归档、可新增；项目作为可选统计维度
+- **分类 / 项目管理**：5 默认一级 + 15 二级，色块选择器调色，可归档、可新增；项目作为可选统计维度
 - **导出 / 备份**：CSV / Markdown 报表 + JSON 全量备份与恢复
-- **暗色主题**：跟随系统，分类色板 light/dark 双色
-- **持久化**：Room (SQLite)，App 重启 / Activity 重建均不丢状态
+- **暗色主题**：跟随系统，分类色板 light/dark 双色（v1.2 翻转：亮模式用 saturated 深色，暗模式用浅色）
+- **持久化**：Room v3 (SQLite)，App 重启 / Activity 重建均不丢状态；Room Migration 显式管理
 
 ## 重大版本重构与实施规划
 
@@ -30,7 +31,18 @@
 - [x] Phase 7 — 设置：分类/项目管理 + 默认起点 + CSV/MD/JSON 导出 + JSON 恢复
 - [x] Phase 8 — 暗色主题适配 + 锁竖屏 + 新启动图标 + Lint/test 通过 + README 重写
 
-**v1.1 候选**：自定义统计范围、分类拖拽排序、分类调色色板 UI、记一笔项目字段、年度按月柱状图、ProGuard 规则与 release 签名。
+**v1.1（2026-06-21）**：4 项 UX 维护 — Tab 重排 + 中间 TODAY FAB / 顶层 BackHandler / DurationInput 三 chip + 双轮 wheel / 默认分类 5+13（destructive migration 一次性破例）。
+
+**v1.2（2026-06-27）**：5 大诉求 + 配套迭代（详见 `docs/v1.2-plan-2026-06-26.md` 与 `docs/v1.2-summary-2026-06-27.md`）：
+
+- [x] §1 记一笔滑选式重写 — `ChoiceWheel` 横向滑选 + 日期去 label + 标题派生 + 备注改 singleLine + EffectivenessRow slider
+- [x] §2 AI 复盘 — DeepSeek 集成（OkHttp + INTERNET + JSON mode + 双周期 snapshot + 首次隐私 dialog + Settings 子页测试连接）
+- [x] §3 TODAY 尾部「+」占位 + 一键插 10min 间隔 + v1.2 seed（讨论 + 间隔）+ Room v2→v3 加 effectiveness 列（显式 Migration）
+- [x] §4 STATS 默认本周 + 头部右上周期 + 去重 rangeToDates
+- [x] §5 分类调色板可视化 — ColorSwatchPicker 色块网格替换 8 个文字按钮
+- [x] 配套 — Launcher icon 美术 / 亮暗 palette 翻转 / TimelineBlock 文字色自适应 / effectiveness-weighted 统计聚合
+
+**v1.3 候选**：API key 加密（EncryptedSharedPreferences）/ Release signing + ProGuard keep / ChoiceWheel 左边界 snap 真修复 / AI 响应 JSON retry / 备注字段 IME 动画优化。
 
 ## 分类持久化行为
 
