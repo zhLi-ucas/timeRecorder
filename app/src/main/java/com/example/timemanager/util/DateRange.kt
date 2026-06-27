@@ -18,6 +18,23 @@ object DateRange {
             today.withDayOfMonth(1) to today.withDayOfMonth(today.lengthOfMonth())
     }
 
+    fun previousFor(
+        type: com.example.timemanager.viewmodel.ReviewPeriod,
+        today: LocalDate
+    ): Pair<LocalDate, LocalDate> {
+        val (curStart, curEnd) = currentFor(type, today)
+        return when (type) {
+            com.example.timemanager.viewmodel.ReviewPeriod.DAY ->
+                curStart.minusDays(1) to curEnd.minusDays(1)
+            com.example.timemanager.viewmodel.ReviewPeriod.WEEK ->
+                curStart.minusWeeks(1) to curEnd.minusWeeks(1)
+            com.example.timemanager.viewmodel.ReviewPeriod.MONTH -> {
+                val firstOfPrev = curStart.minusMonths(1).withDayOfMonth(1)
+                firstOfPrev to firstOfPrev.withDayOfMonth(firstOfPrev.lengthOfMonth())
+            }
+        }
+    }
+
     fun statsRange(
         range: com.example.timemanager.viewmodel.StatsRange,
         today: LocalDate

@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.timemanager.ui.screens.AiDeepSeekScreen
 import com.example.timemanager.ui.screens.CategoryManagerScreen
 import com.example.timemanager.ui.screens.ProjectManagerScreen
 import com.example.timemanager.ui.screens.RecordScreen
@@ -171,6 +172,10 @@ fun AppContent() {
                         onBack = { settingsSubpage = SettingsSubpage.ROOT }
                     )
                     SettingsSubpage.PROJECTS -> ProjectManagerScreen(
+                        viewModel = settingsVm,
+                        onBack = { settingsSubpage = SettingsSubpage.ROOT }
+                    )
+                    SettingsSubpage.AI_DEEPSEEK -> AiDeepSeekScreen(
                         viewModel = settingsVm,
                         onBack = { settingsSubpage = SettingsSubpage.ROOT }
                     )

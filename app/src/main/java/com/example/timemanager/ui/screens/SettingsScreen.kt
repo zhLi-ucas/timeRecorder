@@ -43,7 +43,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
-enum class SettingsSubpage { ROOT, CATEGORIES, PROJECTS }
+enum class SettingsSubpage { ROOT, CATEGORIES, PROJECTS, AI_DEEPSEEK }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -132,6 +132,7 @@ fun SettingsScreen(
             SectionHeader("数据管理")
             NavRow("分类管理") { onNavigate(SettingsSubpage.CATEGORIES) }
             NavRow("项目管理") { onNavigate(SettingsSubpage.PROJECTS) }
+            NavRow("AI / DeepSeek") { onNavigate(SettingsSubpage.AI_DEEPSEEK) }
             HorizontalDivider()
 
             SectionHeader("默认起点")

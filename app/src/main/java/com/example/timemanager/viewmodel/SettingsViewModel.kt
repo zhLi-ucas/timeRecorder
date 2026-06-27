@@ -8,6 +8,8 @@ import com.example.timemanager.data.db.AppDatabase
 import com.example.timemanager.data.entity.AppSettingEntity
 import com.example.timemanager.data.entity.CategoryEntity
 import com.example.timemanager.data.entity.ProjectEntity
+import com.example.timemanager.data.remote.DeepSeekApi
+import com.example.timemanager.data.remote.DeepSeekConfig
 import com.example.timemanager.util.CsvExporter
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -40,6 +42,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _dayStartMin = MutableStateFlow(480)
     val dayStartMin: StateFlow<Int> = _dayStartMin.asStateFlow()
 
+    private val _deepseekApiKey = MutableStateFlow("")
+    val deepseekApiKey: StateFlow<String> = _deepseekApiKey.asStateFlow()
+
+    private val _deepseekModel = MutableStateFlow(DefaultDataSeeder.DEFAULT_DEEPSEEK_MODEL)
+    val deepseekModel: StateFlow<String> = _deepseekModel.asStateFlow()
+
+    private val _deepseekTestState = MutableStateFlow<DeepSeekTestState>(DeepSeekTestState.Idle)
+    val deepseekTestState: StateFlow<DeepSeekTestState> = _deepseekTestState.asStateFlow()
+
     private val _toast = MutableStateFlow<String?>(null)
     val toast: StateFlow<String?> = _toast.asStateFlow()
 
@@ -47,6 +58,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             _dayStartMin.value =
                 settingDao.getByKey(DefaultDataSeeder.KEY_DAY_START_MIN)?.toIntOrNull() ?: 480
+            _deepseekApiKey.value = settingDao.getByKey(DefaultDataSeeder.KEY_DEEPSEEK_API_KEY).orEmpty()
+            _deepseekModel.value = settingDao.getByKey(DefaultDataSeeder.KEY_DEEPSEEK_MODEL)
+                ?.ifBlank { null }
+                ?: DefaultDataSeeder.DEFAULT_DEEPSEEK_MODEL
         }
     }
 
@@ -173,6 +188,49 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             settingDao.upsert(AppSettingEntity(DefaultDataSeeder.KEY_DAY_START_MIN, clamped.toString()))
         }
+    }
+
+    // --- DeepSeek ---
+
+    fun setDeepSeekApiKey(key: String) {
+        _deepseekApiKey.value = key
+        viewModelScope.launch {
+            settingDao.upsert(AppSettingEntity(DefaultDataSeeder.KEY_DEEPSEEK_API_KEY, key))
+            _deepseekTestState.value = DeepSeekTestState.Idle
+        }
+    }
+
+    fun setDeepSeekModel(model: String) {
+        _deepseekModel.value = model
+        viewModelScope.launch {
+            settingDao.upsert(AppSettingEntity(DefaultDataSeeder.KEY_DEEPSEEK_MODEL, model))
+            _deepseekTestState.value = DeepSeekTestState.Idle
+        }
+    }
+
+    fun testDeepSeekConnection() {
+        val key = _deepseekApiKey.value.trim()
+        if (key.isBlank()) {
+            _deepseekTestState.value = DeepSeekTestState.Error("未填写 API key")
+            return
+        }
+        val cfg = DeepSeekConfig(apiKey = key, model = _deepseekModel.value)
+        _deepseekTestState.value = DeepSeekTestState.Loading
+        viewModelScope.launch {
+            val started = System.currentTimeMillis()
+            when (val r = DeepSeekApi(cfg).ping()) {
+                is DeepSeekApi.Result.Success -> {
+                    val ms = System.currentTimeMillis() - started
+                    _deepseekTestState.value = DeepSeekTestState.Success(ms)
+                }
+                is DeepSeekApi.Result.Error ->
+                    _deepseekTestState.value = DeepSeekTestState.Error(r.message)
+            }
+        }
+    }
+
+    fun consumeTestState() {
+        _deepseekTestState.value = DeepSeekTestState.Idle
     }
 
     // --- Export ---
@@ -363,4 +421,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
         return count
     }
+}
+
+sealed interface DeepSeekTestState {
+    data object Idle : DeepSeekTestState
+    data object Loading : DeepSeekTestState
+    data class Success(val latencyMs: Long) : DeepSeekTestState
+    data class Error(val message: String) : DeepSeekTestState
 }

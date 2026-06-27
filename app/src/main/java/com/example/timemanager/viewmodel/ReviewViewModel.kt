@@ -3,8 +3,13 @@ package com.example.timemanager.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.timemanager.data.DefaultDataSeeder
 import com.example.timemanager.data.db.AppDatabase
+import com.example.timemanager.data.entity.AppSettingEntity
 import com.example.timemanager.data.entity.ReviewEntity
+import com.example.timemanager.data.remote.AiReviewRequestBuilder
+import com.example.timemanager.data.remote.DeepSeekApi
+import com.example.timemanager.data.remote.DeepSeekConfig
 import com.example.timemanager.util.DateRange
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,13 +47,23 @@ data class ReviewFormState(
 }
 
 class ReviewViewModel(application: Application) : AndroidViewModel(application) {
-    private val reviewDao = AppDatabase.getInstance(application).reviewDao()
+    private val db = AppDatabase.getInstance(application)
+    private val reviewDao = db.reviewDao()
+    private val entryDao = db.timeEntryDao()
+    private val categoryDao = db.categoryDao()
+    private val settingDao = db.appSettingDao()
 
     private val _periodType = MutableStateFlow(ReviewPeriod.MONTH)
     val periodType: StateFlow<ReviewPeriod> = _periodType.asStateFlow()
 
     private val _form = MutableStateFlow(ReviewFormState())
     val form: StateFlow<ReviewFormState> = _form.asStateFlow()
+
+    private val _aiState = MutableStateFlow<AiState>(AiState.Idle)
+    val aiState: StateFlow<AiState> = _aiState.asStateFlow()
+
+    private val _aiConfirmed = MutableStateFlow(false)
+    val aiConfirmed: StateFlow<Boolean> = _aiConfirmed.asStateFlow()
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val history: StateFlow<List<ReviewEntity>> = _periodType
@@ -57,6 +72,9 @@ class ReviewViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         loadCurrentPeriodForm()
+        viewModelScope.launch {
+            _aiConfirmed.value = settingDao.getByKey(DefaultDataSeeder.KEY_AI_CONFIRMED) == "true"
+        }
     }
 
     fun selectPeriod(type: ReviewPeriod) {
@@ -120,7 +138,79 @@ class ReviewViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun setAiConfirmed() {
+        _aiConfirmed.value = true
+        viewModelScope.launch {
+            settingDao.upsert(AppSettingEntity(DefaultDataSeeder.KEY_AI_CONFIRMED, "true"))
+        }
+    }
+
+    fun resetAiState() {
+        if (_aiState.value !is AiState.Loading) _aiState.value = AiState.Idle
+    }
+
+    fun generateWithAi() {
+        if (_aiState.value is AiState.Loading) return
+        _aiState.value = AiState.Loading
+        viewModelScope.launch {
+            val key = settingDao.getByKey(DefaultDataSeeder.KEY_DEEPSEEK_API_KEY)?.trim()
+            if (key.isNullOrBlank()) {
+                _aiState.value = AiState.Error("未配置 API key，请去设置 → AI / DeepSeek")
+                return@launch
+            }
+            val model = settingDao.getByKey(DefaultDataSeeder.KEY_DEEPSEEK_MODEL)
+                ?.ifBlank { null }
+                ?: DefaultDataSeeder.DEFAULT_DEEPSEEK_MODEL
+            val cfg = DeepSeekConfig(apiKey = key, model = model)
+
+            val period = _periodType.value
+            val today = LocalDate.now()
+            val currentRange = DateRange.currentFor(period, today)
+            val previousRange = DateRange.previousFor(period, today)
+
+            val entries = entryDao.getByDateRange(currentRange.first, currentRange.second)
+            val prevEntries = entryDao.getByDateRange(previousRange.first, previousRange.second)
+            val categories = categoryDao.getAll()
+            val previousReview = reviewDao.getByPeriod(period.name, previousRange.first, previousRange.second)
+            val dayStart = settingDao.getByKey(DefaultDataSeeder.KEY_DAY_START_MIN)?.toIntOrNull() ?: 480
+
+            if (entries.isEmpty()) {
+                _aiState.value = AiState.Error("本${period.label}暂无时间记录，无法生成")
+                return@launch
+            }
+
+            val messages = AiReviewRequestBuilder.buildMessages(
+                period, currentRange, previousRange,
+                entries, prevEntries, categories, previousReview, dayStart
+            )
+            when (val r = DeepSeekApi(cfg).chat(messages, jsonMode = true, maxTokens = 2000)) {
+                is DeepSeekApi.Result.Success -> {
+                    val parsed = AiReviewRequestBuilder.parseResponse(r.content)
+                    if (parsed == null) {
+                        _aiState.value = AiState.Error("AI 响应解析失败")
+                    } else {
+                        _form.value = _form.value.copy(
+                            summaryText = parsed.summary,
+                            mainFindings = parsed.findings,
+                            adjustmentPlan = parsed.adjust
+                        )
+                        _aiState.value = AiState.Done
+                    }
+                }
+                is DeepSeekApi.Result.Error ->
+                    _aiState.value = AiState.Error("API key 无效或网络错误：${r.message}")
+            }
+        }
+    }
+
     private fun update(block: (ReviewFormState) -> ReviewFormState) {
         _form.value = block(_form.value)
     }
+}
+
+sealed interface AiState {
+    data object Idle : AiState
+    data object Loading : AiState
+    data object Done : AiState
+    data class Error(val message: String) : AiState
 }

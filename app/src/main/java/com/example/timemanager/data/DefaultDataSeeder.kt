@@ -110,5 +110,9 @@ class DefaultDataSeeder(private val db: AppDatabase) {
         const val KEY_TIME_FORMAT = "time_format"
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_DURATION_UNIT = "duration_unit"
+        const val KEY_DEEPSEEK_API_KEY = "deepseek_api_key"
+        const val KEY_DEEPSEEK_MODEL = "deepseek_model"
+        const val KEY_AI_CONFIRMED = "ai_confirmed"
+        const val DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash"
     }
 }
