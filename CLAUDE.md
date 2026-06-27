@@ -191,21 +191,22 @@ User edits to categories (rename / archive / add) **persist across app updates**
 - **底栏始终可见**（v1.1 改动）— RECORD 屏现在也是普通 tab，不是模态；之前隐藏底栏的逻辑已删除。
 - **`CategoryColors.colorFor(key)` is `@Composable`** — it switches between light/dark palettes via `isSystemInDarkTheme()`. All 3 call sites are inside Composition. Don't call from non-Composable contexts.
 
-### AI integration (v1.2 起，v1.3 扩展)
+### AI integration (v1.2 起，v1.3 扩展 + post-release fix)
 
 REVIEW tab 的「AI 生成草稿」按钮调用 DeepSeek。链路：
 
 - `data/remote/DeepSeekConfig.kt` — `data class(apiKey, model)`
 - `data/remote/DeepSeekApi.kt` — OkHttp 封装，POST `https://api.deepseek.com/v1/chat/completions`，JSON mode，`Result sealed class (Success/Error)`，`withContext(Dispatchers.IO)` + 60s readTimeout
 - `data/remote/AiReviewRequestBuilder.kt` — snapshot 构建器：v1.3 起只发**当前周期** entries + L1/L2 breakdown + effectiveness-weighted minutes + `recentReviews: List<ReviewEntity>`（替代 v1.2 的双周期 + previousReview）；`buildMessages(...)` 接 `effectivePrompt`（已替换 `{period}` 占位符）；`buildPreview(...)` 返回格式化预览文本；`parseResponse(content)` 解 `{summary, findings, adjust}`
-- `viewmodel/ReviewViewModel.kt` — `AiState sealed interface (Idle/Loading/Done/Error)`；v1.3 拆 `generateWithAi` 入口判断 MONTH 走 dialog 分支 + `proceedAiCall(period, anchor, selectedMondays)`；`fetchRecentReviews` 按 period + 配置数字（DAY/WEEK）或 dialog 选择（MONTH）拉历史 review；`MonthWeekOption` + `_monthPicker` state + dialog 操作方法
-- `viewmodel/SettingsViewModel.kt` — DeepSeek key/model/prompt StateFlow + 上下文窗口 dayDays/weekDays StateFlow + `testConnection()` + `requestPreview(prompt)` / `clearPreview()`
+- `viewmodel/ReviewViewModel.kt` — `AiState sealed interface (Idle/Loading/Done/Error)`；v1.3 拆 `generateWithAi` 入口判断 MONTH 走 dialog 分支 + `proceedAiCall(period, anchor, selectedMondays)`；`fetchRecentReviews` 按 period + 配置数字（DAY/WEEK）或 dialog 选择（MONTH）拉历史 review；`MonthWeekOption` + `_monthPicker` state + dialog 操作方法；**post-release fix**：加 `PendingPreviewData` + `_pendingPreview` state，所有生成路径先经预览中转（`buildAndShowPendingPreview`），用户在 `PreviewDialog` 二次确认后才 `proceedAiCall`——参数全部来自 `PendingPreviewData`，"所见即所传"
+- `viewmodel/SettingsViewModel.kt` — DeepSeek key/model/prompt StateFlow + 上下文窗口 dayDays/weekDays StateFlow + `testConnection()` + `requestPreview(prompt)` / `clearPreview()`（独立预览，仅 Settings 子页用）
 - `ui/screens/AiDeepSeekScreen.kt` — Settings 子页：API key（password）+ 模型 radio + **复盘 Prompt 编辑器（多行 + 字符计数 2000 + {period} 提示 + 重置默认 + 预览 + 保存）** + **上下文窗口（DAY 1–14 / WEEK 1–7 数字输入 + MONTH helper）** + 测试连接 + 隐私说明
+- `ui/components/PreviewDialog.kt` — 滚动 monospace 展示完整 system + user JSON；可选 `onConfirm` 参数——有则显示"确认生成/取消/复制全部"（REVIEW 生成流程用），无则"关闭/复制全部"（Settings 子页调 prompt 看效果用）
 - 模型默认 `deepseek-v4-flash`（旧名 `deepseek-chat` 2026/07/24 弃用），可切 `deepseek-v4-pro`
 - prompt 默认 `DEFAULT_DEEPSEEK_PROMPT`（含 `{period}` 占位符）+ `JSON_FORMAT_SUFFIX` **始终追加**（用户改 prompt 不会破坏 JSON 输出格式）
 - 首次调用必须 AlertDialog 隐私确认 → 写 `ai_confirmed=true` 永久放行
-- MONTH 复盘先弹 `MonthReviewPickerDialog` 让用户勾选本月涉及周；DAY/WEEK 走配置数字
-- 预览功能两处入口（Settings + REVIEW）通过 `PreviewDialog` 滚动展示完整上传内容（含"复制全部"）
+- MONTH 复盘先弹 `MonthReviewPickerDialog` 让用户勾选本月涉及周 → 再弹 PreviewDialog 二次确认 → 确认生成才发请求；DAY/WEEK 直接走 PreviewDialog 确认
+- **DatePicker 时区**：Material3 DatePicker 内部按 UTC 解释 millis——`initialSelectedDateMillis` 和 `selectedDateMillis` 都必须用 `ZoneOffset.UTC` 转换，**不要**用 `ZoneId.systemDefault()`（在 UTC+ 时区会让 focus 跳到昨天）
 - 失败 toast，旧字段保留不覆盖
 
 ## Where to look for what
